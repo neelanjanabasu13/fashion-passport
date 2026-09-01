@@ -19,9 +19,9 @@ export function scoreProduct(product: Product, profile: FashionProfile, learnedA
   };
 
   const hardBlocks: string[] = [];
-  if (!product.sizes.includes(profile.size)) hardBlocks.push(`${profile.size} unavailable`);
+  if (product.sizes.length > 0 && !product.sizes.includes(profile.size)) hardBlocks.push(`${profile.size} unavailable`);
   if (product.price > profile.budget) hardBlocks.push(`Over £${profile.budget} budget`);
-  if (includes(profile.materials.avoid, product.material)) hardBlocks.push(`${product.material} is on your avoid list`);
+  if (product.material !== "Not stated" && includes(profile.materials.avoid, product.material)) hardBlocks.push(`${product.material} is on your avoid list`);
 
   // Deliberately score a person's stated taste above styling theory.
   if (includes(profile.colours.love, product.colour)) positive(`${product.colour} is a colour you love`, 14);
@@ -38,7 +38,7 @@ export function scoreProduct(product: Product, profile: FashionProfile, learnedA
   else if (includes(profile.sleeves.avoid, product.sleeve)) warning(`${product.sleeve} sleeves`, 7);
 
   if (includes(profile.patterns.love, product.pattern)) positive(`${product.pattern} pattern`, 5);
-  else if (includes(profile.patterns.avoid, product.pattern)) warning(`${product.pattern} print`, 8);
+  else if (includes(profile.patterns.avoid, product.pattern)) warning(product.pattern === "Large print" ? "Large-scale print" : product.pattern === "Animal" ? "Animal print" : product.pattern, 8);
 
   if (includes(profile.materials.love, product.material)) positive(`${product.material}`, 7);
   if (includes(profile.lengths.love, product.length)) positive(`${product.length} length`, 6);

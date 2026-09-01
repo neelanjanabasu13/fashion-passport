@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { DressArt } from "@/components/dress-art";
 import { Icon } from "@/components/icons";
-import { demoProfile, products, retailers } from "@/lib/data";
+import { demoProfile, products, retailers, tasteProducts } from "@/lib/data";
 import { rankProducts } from "@/lib/scoring";
 import type { Retailer, ScoredProduct } from "@/lib/types";
 
@@ -25,7 +26,7 @@ function ProductCard({ item, reaction, onReact }: { item: ScoredProduct; reactio
   return (
     <article className={`product-card ${item.blocked ? "blocked" : ""}`} data-product-id={item.id}>
       <div className="product-visual">
-        <DressArt product={item} />
+        {item.imageUrl ? <Image className="real-product-image" src={item.imageUrl} alt={`${item.name} at ${item.brand}`} fill sizes="(max-width: 700px) 92vw, (max-width: 1000px) 45vw, 22vw" /> : <DressArt product={item} />}
         {item.score > 0 && <div className={`match-badge ${item.score >= 90 ? "best" : ""}`}><strong>{item.score}%</strong><span>match</span></div>}
         <div className="reaction-row" aria-label={`Give feedback on ${item.name}`}>
           <button className={reaction === "down" ? "active" : ""} onClick={() => onReact(item, "down")} aria-label="Show me less like this"><Icon name="thumbsDown" /></button>
@@ -39,7 +40,7 @@ function ProductCard({ item, reaction, onReact }: { item: ScoredProduct; reactio
           {topReasons.map((reason) => <li key={reason.label}><Icon name="check" />{reason.label}</li>)}
           {warning && <li className="warning"><span>!</span>{warning.label}</li>}
         </ul>
-        <button className="view-item">View item <Icon name="arrow" /></button>
+        {item.productUrl ? <a className="view-item" href={item.productUrl} target="_blank" rel="noreferrer">View real item <Icon name="external" /></a> : <button className="view-item">View item <Icon name="arrow" /></button>}
       </div>
     </article>
   );
@@ -95,20 +96,26 @@ function PassportView() {
 }
 
 function TasteView({ onDone }: { onDone: () => void }) {
-  const choices = products.slice(0, 4);
+  const choices = tasteProducts;
   const [index, setIndex] = useState(0);
-  const [rated, setRated] = useState(0);
-  const current = choices[index % choices.length];
-  const react = () => { setRated((n) => n + 1); setIndex((n) => n + 1); };
+  const current = choices[index];
+  const react = (reaction: Reaction) => {
+    if (!current) return;
+    const saved = JSON.parse(localStorage.getItem("fashion-passport:taste-onboarding") || "[]") as { productId: string; reaction: Reaction }[];
+    localStorage.setItem("fashion-passport:taste-onboarding", JSON.stringify([...saved.filter((item) => item.productId !== current.id), { productId: current.id, reaction }]));
+    setIndex((n) => n + 1);
+  };
   return (
     <main className="taste-page">
-      <div className="page-heading compact"><p className="eyebrow">No questionnaire</p><h1>Teach it by reacting.</h1><p>A few instinctive taps work better than asking you to describe your style.</p></div>
+      <div className="page-heading compact"><p className="eyebrow">Abstract preference study</p><h1>Teach it by reacting.</h1><p>These are deliberately neutral garment sketches—not retailer products—so you can react to shape, neckline and pattern without brand or price getting in the way.</p></div>
       <section className="taste-stage">
-        <div className="progress-line"><span style={{ width: `${Math.min(100, rated * 20)}%` }} /></div>
-        <div className="taste-card" key={`${current.id}-${index}`}><DressArt product={current} /><div className="taste-caption"><strong>{current.silhouette}</strong><span>{current.neckline} neck · {current.pattern}</span></div></div>
-        <div className="taste-actions"><button onClick={react} aria-label="Not for me"><Icon name="thumbsDown" /><span>Not me</span></button><button className="love" onClick={react} aria-label="Love it"><Icon name="thumbsUp" /><span>Love it</span></button></div>
-        <p className="microcopy">No typing. We learn the details in the background.</p>
-        {rated >= 5 && <button className="primary-button" onClick={onDone}>See what I learned <Icon name="arrow" /></button>}
+        <div className="progress-meta"><span>{Math.min(index + 1, choices.length)} of {choices.length}</span><span>No repeats</span></div>
+        <div className="progress-line"><span style={{ width: `${Math.min(100, (index / choices.length) * 100)}%` }} /></div>
+        {current ? <>
+          <div className="taste-card" key={current.id}><DressArt product={current} /><div className="taste-caption"><strong>{current.silhouette}</strong><span>{current.neckline} neck · {current.pattern}</span></div></div>
+          <div className="taste-actions"><button onClick={() => react("down")} aria-label="Not for me"><Icon name="thumbsDown" /><span>Not me</span></button><button className="love" onClick={() => react("up")} aria-label="Love it"><Icon name="thumbsUp" /><span>Love it</span></button></div>
+          <p className="microcopy">One tap stores the signal locally. This sketch will not appear again.</p>
+        </> : <div className="taste-complete"><div className="approval-icon"><Icon name="check" /></div><h2>Taste pass complete</h2><p>Twelve distinct reactions have been saved locally and are ready to influence ranking.</p><button className="primary-button" onClick={onDone}>See my matches <Icon name="arrow" /></button></div>}
       </section>
     </main>
   );
@@ -159,11 +166,7 @@ export default function Home() {
 
   const retailer = retailers.find((item) => item.id === retailerId) || retailers[0];
   const isApproved = approved.includes(retailerId);
-  const ranked = useMemo(() => {
-    const baseItems = products.filter((product) => product.retailerId === retailerId);
-    const expandedItems = baseItems.length >= 3 ? baseItems : [...baseItems, ...products.filter((p) => p.retailerId !== retailerId).slice(0, 4 - baseItems.length).map((p) => ({ ...p, id: `${retailerId}-${p.id}`, retailerId }))];
-    return rankProducts(expandedItems, demoProfile, learnedAvoid);
-  }, [retailerId, learnedAvoid]);
+  const ranked = useMemo(() => rankProducts(products.filter((product) => product.retailerId === retailerId), demoProfile, learnedAvoid), [retailerId, learnedAvoid]);
   const visible = passportOn && isApproved ? ranked.filter((item) => showBlocked || !item.blocked) : ranked.map((item) => ({ ...item, score: 0 }));
   const hiddenCount = passportOn && isApproved ? ranked.filter((item) => item.blocked).length : 0;
 
@@ -253,11 +256,13 @@ export default function Home() {
         </section>
         <section className="storefront">
           <div className="retailer-strip"><div className="retailer-tabs">{retailers.map((item) => <button key={item.id} onClick={() => selectRetailer(item.id)} className={retailerId === item.id ? "active" : ""}><span>{item.name}</span>{item.kind === "shopify" && <small>Shopify</small>}</button>)}</div><a href={retailer.url} target="_blank" rel="noreferrer">Open real store <Icon name="external"/></a></div>
-          <div className="store-heading"><div><div className="store-label"><span className="retailer-avatar">{retailer.name.slice(0, 1)}</span><p>{retailerKind(retailer)}<strong>{retailer.name} · Dresses</strong></p></div></div><div className={`passport-switch ${passportOn && isApproved ? "on" : ""}`}><div><Icon name="passport"/><span>Fashion Passport<strong>{isApproved ? (passportOn ? "Applied" : "Paused") : "Permission needed"}</strong></span></div>{isApproved ? <button role="switch" aria-checked={passportOn} onClick={() => setPassportOn(!passportOn)}><i/></button> : <button className="apply-small" onClick={() => setApprovalTarget(retailer)}>Review & apply</button>}</div></div>
+          <div className="store-heading"><div><div className="store-label"><span className="retailer-avatar">{retailer.name.slice(0, 1)}</span><p>{ranked.length ? "Verified retailer snapshot" : retailerKind(retailer)}<strong>{retailer.name} · Dresses</strong></p></div></div><div className={`passport-switch ${passportOn && isApproved ? "on" : ""}`}><div><Icon name="passport"/><span>Fashion Passport<strong>{isApproved ? (passportOn ? "Applied" : "Paused") : "Permission needed"}</strong></span></div>{isApproved ? <button role="switch" aria-checked={passportOn} onClick={() => setPassportOn(!passportOn)}><i/></button> : <button className="apply-small" onClick={() => setApprovalTarget(retailer)}>Review & apply</button>}</div></div>
           {passportOn && isApproved ? <div className="applied-banner"><Icon name="check"/><span><strong>Passport applied.</strong> UK 10 · under £100 · personalised to your colour, shape and taste</span><button onClick={() => setView("passport")}>See profile</button></div> : <div className="permission-banner"><Icon name="lock"/><span><strong>Your Passport is private.</strong> Approve {retailer.name} once to filter and rank this page.</span><button onClick={() => setApprovalTarget(retailer)}>Review & apply <Icon name="arrow"/></button></div>}
-          <div className="catalogue-toolbar"><p><strong>{visible.length}</strong> dresses {passportOn && isApproved ? "picked for you" : "in the catalogue"}</p><div><button className="filter-button"><Icon name="sliders"/> Filters</button><select aria-label="Sort products"><option>Best match</option><option>Price low to high</option></select></div></div>
-          <div className="product-grid">{visible.map((item) => <ProductCard key={item.id} item={item} reaction={reactions[item.id]} onReact={reactTo}/>)}</div>
-          {hiddenCount > 0 && !showBlocked && <button className="hidden-products" onClick={() => setShowBlocked(true)}><Icon name="shield"/><span><strong>{hiddenCount} unsuitable {hiddenCount === 1 ? "item" : "items"} hidden</strong>Wrong size, over budget or avoided material</span><span>Show anyway</span></button>}
+          {ranked.length ? <>
+            <div className="catalogue-toolbar"><p><strong>{visible.length}</strong> real dresses {passportOn && isApproved ? "picked for you" : "in this verified snapshot"}</p><div><span className="snapshot-date">Retailer data · 1 Sep 2026</span><select aria-label="Sort products"><option>Best match</option><option>Price low to high</option></select></div></div>
+            <div className="product-grid">{visible.map((item) => <ProductCard key={item.id} item={item} reaction={reactions[item.id]} onReact={reactTo}/>)}</div>
+            {hiddenCount > 0 && !showBlocked && <button className="hidden-products" onClick={() => setShowBlocked(true)}><Icon name="shield"/><span><strong>{hiddenCount} unsuitable {hiddenCount === 1 ? "item" : "items"} hidden</strong>Wrong size, over budget or avoided material</span><span>Show anyway</span></button>}
+          </> : <section className="live-site-only"><div className="live-site-icon"><Icon name="external" /></div><p className="eyebrow">Personalise the real page</p><h2>No invented {retailer.name} inventory here.</h2><p>{retailer.name} does not expose a stable public catalogue feed for this standalone demonstrator. Open the real store with the Fashion Passport extension to rank its current products and images in place.</p><a href={retailer.url} target="_blank" rel="noreferrer">Open {retailer.name} dresses <Icon name="external" /></a><small>Requires the unpacked Chrome extension included in this repository.</small></section>}
         </section>
       </main>}
       <footer><span>Fashion Passport</span><p>Your taste travels. Your data doesn’t.</p><div>Built for the WebMCP Challenge · 2026</div></footer>

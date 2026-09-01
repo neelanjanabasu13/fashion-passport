@@ -41,6 +41,9 @@ export type Product = {
   length: string;
   sizes: string[];
   accent?: string;
+  imageUrl?: string;
+  productUrl?: string;
+  source?: "live-snapshot" | "preference-sketch";
 };
 
 export type ScoreReason = {
@@ -54,4 +57,3 @@ export type ScoredProduct = Product & {
   reasons: ScoreReason[];
   blocked: boolean;
 };
-
