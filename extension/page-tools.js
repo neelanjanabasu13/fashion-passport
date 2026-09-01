@@ -23,9 +23,9 @@
     const tools = [
       {
         name: "get_fashion_passport", title: "Read Fashion Passport",
-        description: "Returns the shopper's portable fashion profile only after this Shopify retailer has been approved. Explicit taste overrides styling theory.",
+        description: "Returns the shopper's portable fashion profile only after the one-time Fashion Passport connection. Explicit taste overrides styling theory.",
         inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true },
-        execute: async () => approved() ? { status: "approved", profile, retailer: location.hostname, privacy: { photosRetained: false, browsingSignals: "local-only" } } : { status: "approval_required", retailer: location.hostname }
+        execute: async () => approved() ? { status: "connected", profile, retailer: location.hostname, privacy: { photosRetained: false, browsingSignals: "local-only" } } : { status: "connection_required", retailer: location.hostname }
       },
       {
         name: "apply_fashion_passport", title: "Apply Fashion Passport to this Shopify store",
@@ -37,7 +37,7 @@
         name: "get_personalization_summary", title: "Get live Shopify personalization summary",
         description: "Reports the native endpoint and how many real retailer products Fashion Passport ranked, recommended or held back.",
         inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true },
-        execute: async () => { let summary = {}; try { summary = JSON.parse(document.documentElement.dataset.fashionPassportSummary || "{}"); } catch { /* No results yet. */ } return { status: approved() ? "applied" : "approval_required", retailer: location.hostname, ...summary }; }
+        execute: async () => { let summary = {}; try { summary = JSON.parse(document.documentElement.dataset.fashionPassportSummary || "{}"); } catch { /* No results yet. */ } return { status: approved() ? "applied" : "connection_required", retailer: location.hostname, ...summary }; }
       }
     ];
     await Promise.all(tools.map((tool) => document.modelContext.registerTool(tool, { signal: controller.signal }).catch(() => undefined)));

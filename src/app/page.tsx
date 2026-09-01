@@ -8,7 +8,8 @@ import { demoProfile, retailers, tasteProducts } from "@/lib/data";
 import { rankProducts } from "@/lib/scoring";
 import type { Product, Retailer, ScoredProduct } from "@/lib/types";
 
-const STORE_APPROVALS = "fashion-passport:retailer-approvals";
+const STORE_CONNECTED = "fashion-passport:connected";
+const STORE_ONBOARDED = "fashion-passport:onboarded";
 const STORE_SIGNALS = "fashion-passport:learned-avoid";
 
 type View = "shop" | "passport" | "taste" | "privacy";
@@ -44,22 +45,22 @@ function ProductCard({ item, reaction, onReact }: { item: ScoredProduct; reactio
   );
 }
 
-function ApprovalModal({ retailer, onApprove, onClose }: { retailer: Retailer; onApprove: () => void; onClose: () => void }) {
+function ApprovalModal({ onApprove, onClose }: { onApprove: () => void; onClose: () => void }) {
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section className="approval-modal" role="dialog" aria-modal="true" aria-labelledby="approval-title">
         <button className="modal-close" onClick={onClose} aria-label="Close"><Icon name="close" /></button>
         <div className="approval-icon"><Icon name="passport" /></div>
         <p className="eyebrow">One-time permission</p>
-        <h2 id="approval-title">Use your Passport on {retailer.name}?</h2>
-        <p className="modal-lede">Fashion Passport will share your full profile with {retailer.name} through its official Shopify endpoint, then filter and rank real products. Browsing history stays here.</p>
+        <h2 id="approval-title">Connect your Passport once?</h2>
+        <p className="modal-lede">This single approval lets Fashion Passport apply your profile when you search compatible Shopify fashion stores. It will not ask again for every shop, category or query. Browsing history stays here.</p>
         <div className="share-preview">
           <div><span>Size & fit</span><strong>UK 10 · 163 cm</strong></div>
           <div><span>Style context</span><strong>Deep Winter · Inverted triangle</strong></div>
           <div><span>Taste & limits</span><strong>Colours, cuts, fabric · £100 max</strong></div>
         </div>
         <div className="local-note"><Icon name="shield" /><span><strong>Your signals stay local.</strong> Likes, skips and browsing behaviour remain in this browser.</span></div>
-        <button className="primary-button wide" onClick={onApprove}>Allow on {retailer.name}<Icon name="arrow" /></button>
+        <button className="primary-button wide" onClick={onApprove}>Connect my Passport once<Icon name="arrow" /></button>
         <button className="text-button" onClick={onClose}>Not now</button>
       </section>
     </div>
@@ -96,6 +97,15 @@ function PassportView() {
 function TasteView({ onDone }: { onDone: () => void }) {
   const choices = tasteProducts;
   const [index, setIndex] = useState(0);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        const saved = JSON.parse(localStorage.getItem("fashion-passport:taste-onboarding") || "[]") as { productId: string }[];
+        setIndex(Math.min(saved.length, choices.length));
+      } catch { /* Start at the first distinct preference card. */ }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [choices.length]);
   const current = choices[index];
   const react = (reaction: Reaction) => {
     if (!current) return;
@@ -119,27 +129,27 @@ function TasteView({ onDone }: { onDone: () => void }) {
   );
 }
 
-function PrivacyView({ approvals, onRevoke }: { approvals: string[]; onRevoke: (id: string) => void }) {
+function PrivacyView({ connected, onRevoke }: { connected: boolean; onRevoke: () => void }) {
   return (
     <main className="secondary-page privacy-page">
-      <div className="page-heading"><p className="eyebrow">Privacy by default</p><h1>You carry the Passport.<br/>It doesn’t carry you.</h1><p>Nothing follows you to a new shop without your say-so.</p></div>
+      <div className="page-heading"><p className="eyebrow">Privacy by default</p><h1>You carry the Passport.<br/>It doesn’t carry you.</h1><p>You connect once, can pause it anywhere, and can disconnect it here.</p></div>
       <div className="privacy-grid">
         <section className="privacy-principles">
           <article><Icon name="shield"/><div><h3>Photos disappear</h3><p>Uploads are processed temporarily. Only the colour season or body-shape result is retained.</p></div><span>Always on</span></article>
           <article><Icon name="lock"/><div><h3>Learning stays here</h3><p>Browsing, likes and skips are stored in this browser. Cross-device sync is off.</p></div><span>Local</span></article>
-          <article><Icon name="passport"/><div><h3>Permission per shop</h3><p>Every new retailer must be approved before your full Passport is applied.</p></div><span>Ask first</span></article>
+          <article><Icon name="passport"/><div><h3>One clear connection</h3><p>Approve Fashion Passport once, then use it across compatible stores without repetitive prompts.</p></div><span>Once</span></article>
         </section>
-        <section className="access-panel"><div><p className="eyebrow">Retailer access</p><h2>{approvals.length} approved</h2></div>{approvals.length === 0 ? <p className="empty-access">No retailers have access yet.</p> : approvals.map((id) => { const retailer = retailers.find(r => r.id === id); return retailer ? <div className="access-row" key={id}><div className="retailer-avatar">{retailer.name.slice(0,1)}</div><div><strong>{retailer.name}</strong><span>Full Passport · browsing local</span></div><button onClick={() => onRevoke(id)}>Revoke</button></div> : null; })}</section>
+        <section className="access-panel"><div><p className="eyebrow">Passport connection</p><h2>{connected ? "Connected once" : "Not connected"}</h2></div>{connected ? <div className="access-row"><div className="retailer-avatar">FP</div><div><strong>Compatible Shopify fashion</strong><span>Profile on search · browsing local</span></div><button onClick={onRevoke}>Disconnect</button></div> : <p className="empty-access">Your Passport is still private.</p>}</section>
       </div>
     </main>
   );
 }
 
 export default function Home() {
-  const [view, setView] = useState<View>("shop");
-  const [retailerId, setRetailerId] = useState("jigsaw");
-  const [approved, setApproved] = useState<string[]>([]);
-  const [approvalTarget, setApprovalTarget] = useState<Retailer | null>(null);
+  const [view, setView] = useState<View>("taste");
+  const [retailerId, setRetailerId] = useState("all");
+  const [connected, setConnected] = useState(false);
+  const [showApproval, setShowApproval] = useState(false);
   const [learnedAvoid, setLearnedAvoid] = useState<string[]>([]);
   const [reactions, setReactions] = useState<Record<string, Reaction>>({});
   const [passportOn, setPassportOn] = useState(true);
@@ -150,41 +160,43 @@ export default function Home() {
   const [catalogueState, setCatalogueState] = useState<"idle" | "loading" | "connected" | "error">("idle");
   const [catalogueError, setCatalogueError] = useState("");
   const [liveAt, setLiveAt] = useState("");
-  const stateRef = useRef({ retailerId, approved, learnedAvoid, liveProducts });
+  const [searchStats, setSearchStats] = useState({ storesQueried: 0, storesResponding: 0, candidatesConsidered: 0 });
+  const stateRef = useRef({ retailerId, connected, learnedAvoid, liveProducts });
 
   useEffect(() => {
-    stateRef.current = { retailerId, approved, learnedAvoid, liveProducts };
-  }, [retailerId, approved, learnedAvoid, liveProducts]);
+    stateRef.current = { retailerId, connected, learnedAvoid, liveProducts };
+  }, [retailerId, connected, learnedAvoid, liveProducts]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       try {
-        setApproved(JSON.parse(localStorage.getItem(STORE_APPROVALS) || "[]"));
+        setConnected(localStorage.getItem(STORE_CONNECTED) === "true");
+        setView(localStorage.getItem(STORE_ONBOARDED) === "true" ? "shop" : "taste");
         setLearnedAvoid(JSON.parse(localStorage.getItem(STORE_SIGNALS) || "[]"));
       } catch { /* A fresh local profile is safe fallback. */ }
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
 
-  const retailer = retailers.find((item) => item.id === retailerId) || retailers[0];
-  const isApproved = approved.includes(retailerId);
-  const ranked = useMemo(() => rankProducts(liveProducts.filter((product) => product.retailerId === retailerId), demoProfile, learnedAvoid), [liveProducts, retailerId, learnedAvoid]);
-  const visible = passportOn && isApproved ? ranked.filter((item) => showBlocked || !item.blocked) : ranked.map((item) => ({ ...item, score: 0 }));
-  const hiddenCount = passportOn && isApproved ? ranked.filter((item) => item.blocked).length : 0;
+  const retailer = retailers.find((item) => item.id === retailerId);
+  const ranked = useMemo(() => rankProducts(retailerId === "all" ? liveProducts : liveProducts.filter((product) => product.retailerId === retailerId), demoProfile, learnedAvoid), [liveProducts, retailerId, learnedAvoid]);
+  const visible = (passportOn && connected ? ranked.filter((item) => showBlocked || !item.blocked) : ranked.map((item) => ({ ...item, score: 0 }))).slice(0, 30);
+  const hiddenCount = passportOn && connected ? ranked.filter((item) => item.blocked).length : 0;
 
-  const loadCatalogue = async (targetId: string, requestText: string) => {
+  const loadCatalogue = async (requestText: string) => {
     setCatalogueState("loading"); setCatalogueError(""); setLiveProducts([]); setShowBlocked(false);
     try {
-      const response = await fetch("/api/shopify/search", {
+      const response = await fetch("/api/shopify/search-all", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ retailerId: targetId, query: requestText, sharePassport: true }),
+        body: JSON.stringify({ query: requestText, sharePassport: true }),
       });
-      const payload = await response.json() as { error?: string; products?: Product[]; liveAt?: string };
-      if (!response.ok) throw new Error(payload.error || "The retailer endpoint did not respond");
+      const payload = await response.json() as { error?: string; products?: Product[]; liveAt?: string; storesQueried?: number; storesResponding?: number; candidatesConsidered?: number };
+      if (!response.ok) throw new Error(payload.error || "The Shopify network did not respond");
       const nextProducts = payload.products || [];
-      setLiveProducts(nextProducts); setLiveAt(payload.liveAt || new Date().toISOString()); setCatalogueState("connected");
-      setNotice(`${nextProducts.length} live products received through Shopify UCP`); setTimeout(() => setNotice(""), 2600);
+      setLiveProducts(nextProducts); setRetailerId("all"); setLiveAt(payload.liveAt || new Date().toISOString()); setCatalogueState("connected");
+      setSearchStats({ storesQueried: payload.storesQueried || retailers.length, storesResponding: payload.storesResponding || 0, candidatesConsidered: payload.candidatesConsidered || nextProducts.length });
+      setNotice(`${nextProducts.length} category-correct products considered across ${payload.storesResponding || 0} stores`); setTimeout(() => setNotice(""), 2600);
       return nextProducts;
     } catch (error) {
       setCatalogueState("error"); setCatalogueError(error instanceof Error ? error.message : "Live Shopify search failed");
@@ -201,35 +213,33 @@ export default function Home() {
           name: "get_fashion_passport", title: "Read Fashion Passport",
           description: "Returns the shopper's stable fashion profile, including size, budget, colour season, body shape, loved and avoided garment attributes. Use before fashion search or ranking.",
           inputSchema: { type: "object", properties: {}, additionalProperties: false },
-          annotations: { readOnlyHint: true, untrustedContentHint: true },
-          execute: async () => ({ ...demoProfile, privacy: { photosRetained: false, browsingSignals: "local-only", retailerApprovalRequired: true } }),
+          annotations: { readOnlyHint: true },
+          execute: async () => ({ ...demoProfile, privacy: { photosRetained: false, browsingSignals: "local-only", connection: "one-time global user approval" } }),
         },
         {
           name: "find_personal_matches", title: "Find Personal Matches",
-          description: "Searches a live retailer-owned Shopify UCP catalogue and ranks the real products for this shopper. Explicit personal preferences always overrule colour-season or body-shape theory.",
-          inputSchema: { type: "object", properties: { request: { type: "string", description: "What the shopper is looking for" }, retailer: { type: "string", enum: retailers.map((r) => r.id) } }, required: ["request"], additionalProperties: false },
-          annotations: { readOnlyHint: true },
+          description: "Searches every verified live Shopify UCP catalogue with one request and returns a cross-store personal ranking. Explicit preferences overrule styling theory.",
+          inputSchema: { type: "object", properties: { request: { type: "string", description: "What the shopper is looking for" } }, required: ["request"], additionalProperties: false },
+          annotations: { readOnlyHint: true, untrustedContentHint: true },
           execute: async (input: Record<string, unknown>) => {
-            const selected = typeof input.retailer === "string" ? input.retailer : stateRef.current.retailerId;
-            if (!stateRef.current.approved.includes(selected)) return { status: "approval_required", retailer: selected, instruction: "Ask the shopper to approve this retailer in the Fashion Passport interface." };
-            const response = await fetch("/api/shopify/search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ retailerId: selected, query: input.request, sharePassport: true }) });
-            const payload = await response.json() as { error?: string; products?: Product[]; liveAt?: string };
-            if (!response.ok) return { status: "retailer_unavailable", retailer: selected, error: payload.error };
-            const target = retailers.find((item) => item.id === selected);
+            if (!stateRef.current.connected) return { status: "approval_required", instruction: "Ask the shopper to connect Fashion Passport once in the visible interface." };
+            const response = await fetch("/api/shopify/search-all", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: input.request, sharePassport: true }) });
+            const payload = await response.json() as { error?: string; products?: Product[]; liveAt?: string; storesQueried?: number; storesResponding?: number };
+            if (!response.ok) return { status: "network_unavailable", error: payload.error };
             const nextProducts = payload.products || [];
-            setRetailerId(selected); setLiveProducts(nextProducts); setLiveAt(payload.liveAt || new Date().toISOString()); setCatalogueState("connected");
-            return { status: "connected", protocol: "Shopify UCP/MCP", retailer: target?.name, endpoint: target?.endpoint, request: input.request, matches: rankProducts(nextProducts, demoProfile, stateRef.current.learnedAvoid).slice(0, 5).map(({ id, name, brand, price, score, productUrl, reasons }) => ({ id, name, brand, price, score, productUrl, reasons: reasons.slice(0, 4).map(r => r.label) })) };
+            setRetailerId("all"); setLiveProducts(nextProducts); setLiveAt(payload.liveAt || new Date().toISOString()); setCatalogueState("connected");
+            return { status: "connected", protocol: "Shopify UCP/MCP", storesQueried: payload.storesQueried, storesResponding: payload.storesResponding, request: input.request, matches: rankProducts(nextProducts, demoProfile, stateRef.current.learnedAvoid).slice(0, 10).map(({ id, retailerId, name, brand, price, score, productUrl, reasons }) => ({ id, retailer: retailers.find((item) => item.id === retailerId)?.name, name, brand, price, score, productUrl, reasons: reasons.slice(0, 4).map(r => r.label) })) };
           },
         },
         {
-          name: "compare_approved_shopify_stores", title: "Compare Approved Shopify Stores",
-          description: "Runs one shopping request across every approved showcase retailer through the same Shopify UCP adapter, then returns a single cross-store ranking. Retailer catalogue content is treated as untrusted.",
-          inputSchema: { type: "object", properties: { request: { type: "string", description: "What the shopper wants to find across approved stores" } }, required: ["request"], additionalProperties: false },
+          name: "compare_shopify_stores", title: "Compare Shopify Stores",
+          description: "After the single Passport connection, runs one request across every verified retailer through the same Shopify UCP adapter and returns one ranking.",
+          inputSchema: { type: "object", properties: { request: { type: "string", description: "What the shopper wants to find across stores" } }, required: ["request"], additionalProperties: false },
           annotations: { readOnlyHint: true, untrustedContentHint: true },
           execute: async (input: Record<string, unknown>) => {
             const request = typeof input.request === "string" ? input.request.trim().slice(0, 240) : "";
-            const destinations = retailers.filter((item) => stateRef.current.approved.includes(item.id));
-            if (!destinations.length) return { status: "approval_required", instruction: "Ask the shopper to approve at least one retailer in the visible Fashion Passport interface." };
+            const destinations = stateRef.current.connected ? retailers : [];
+            if (!destinations.length) return { status: "approval_required", instruction: "Ask the shopper to connect Fashion Passport once in the visible interface." };
             const responses = await Promise.all(destinations.map(async (destination) => {
               try {
                 const response = await fetch("/api/shopify/search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ retailerId: destination.id, query: request, sharePassport: true }) });
@@ -252,14 +262,12 @@ export default function Home() {
           },
         },
         {
-          name: "request_retailer_access", title: "Request Retailer Access",
-          description: "Opens the one-time consent screen for a retailer. This never grants access silently; the shopper must approve in the visible interface.",
-          inputSchema: { type: "object", properties: { retailer: { type: "string", enum: retailers.map((r) => r.id) } }, required: ["retailer"], additionalProperties: false },
-          execute: async (input: Record<string, unknown>) => {
-            const target = retailers.find((r) => r.id === input.retailer);
-            if (!target) return { status: "not_found" };
-            setRetailerId(target.id); setApprovalTarget(target);
-            return { status: "awaiting_user_approval", retailer: target.name };
+          name: "request_passport_connection", title: "Request Passport Connection",
+          description: "Opens the single visible consent screen for Fashion Passport. This never connects silently; the shopper must approve in the interface.",
+          inputSchema: { type: "object", properties: {}, additionalProperties: false },
+          execute: async () => {
+            setShowApproval(true);
+            return { status: "awaiting_user_approval", scope: "compatible Shopify fashion stores" };
           },
         },
         {
@@ -284,13 +292,10 @@ export default function Home() {
     return () => controller.abort();
   }, []);
 
-  const selectRetailer = (id: string) => { setRetailerId(id); setShowBlocked(false); setLiveProducts([]); setCatalogueState("idle"); setCatalogueError(""); };
-  const approveRetailer = () => {
-    if (!approvalTarget) return;
-    const target = approvalTarget;
-    const next = Array.from(new Set([...approved, approvalTarget.id]));
-    setApproved(next); localStorage.setItem(STORE_APPROVALS, JSON.stringify(next));
-    setApprovalTarget(null); setPassportOn(true); setRetailerId(target.id); void loadCatalogue(target.id, query);
+  const selectRetailer = (id: string) => { setRetailerId(id); setShowBlocked(false); };
+  const connectPassport = () => {
+    setConnected(true); localStorage.setItem(STORE_CONNECTED, "true");
+    setShowApproval(false); setPassportOn(true); void loadCatalogue(query);
   };
   const reactTo = (item: ScoredProduct, reaction: Reaction) => {
     setReactions((current) => ({ ...current, [item.id]: reaction }));
@@ -300,33 +305,36 @@ export default function Home() {
     } else setNotice("Saved — more like this");
     setTimeout(() => setNotice(""), 2200);
   };
-  const revoke = (id: string) => { const next = approved.filter((item) => item !== id); setApproved(next); localStorage.setItem(STORE_APPROVALS, JSON.stringify(next)); };
+  const revoke = () => { setConnected(false); localStorage.removeItem(STORE_CONNECTED); setLiveProducts([]); setCatalogueState("idle"); };
+  const finishOnboarding = () => { localStorage.setItem(STORE_ONBOARDED, "true"); setView("shop"); };
 
   return (
     <div className="app-shell">
       <header className="topbar"><button className="brand" onClick={() => setView("shop")}><span><Icon name="passport" /></span><strong>Fashion<br/>Passport</strong></button><nav>{(["shop", "passport", "taste", "privacy"] as View[]).map((item) => <button key={item} className={view === item ? "active" : ""} onClick={() => setView(item)}>{item === "taste" ? "Teach my taste" : item[0].toUpperCase() + item.slice(1)}</button>)}</nav><div className="webmcp-pill"><i></i><span>WebMCP ready</span></div></header>
       {view === "passport" && <PassportView />}
-      {view === "taste" && <TasteView onDone={() => setView("shop")} />}
-      {view === "privacy" && <PrivacyView approvals={approved} onRevoke={revoke} />}
+      {view === "taste" && <TasteView onDone={finishOnboarding} />}
+      {view === "privacy" && <PrivacyView connected={connected} onRevoke={revoke} />}
       {view === "shop" && <main className="shop-page">
         <section className="hero-copy"><p className="eyebrow"><Icon name="sparkle" /> One Passport across Shopify fashion</p><h1>Stop starting from scratch.</h1><p>One standard adapter carries your size, taste and suitability context into any compatible Shopify fashion store.</p>
           <div className="scale-proof"><strong>818,354</strong><span>estimated live Shopify apparel stores <a href="https://storeleads.app/reports/shopify/category/Apparel" target="_blank" rel="noreferrer">source · 28 Aug 2026</a></span><i></i><strong>1 adapter</strong><span>discovered at runtime</span></div>
-          <form className="search-box" onSubmit={(e) => { e.preventDefault(); if (!isApproved) setApprovalTarget(retailer); else void loadCatalogue(retailer.id, query); }}><Icon name="search"/><input aria-label="What are you shopping for?" value={query} onChange={(e) => setQuery(e.target.value)} /><button disabled={catalogueState === "loading"}>{catalogueState === "loading" ? "Checking store…" : "Find my matches"}<Icon name="arrow"/></button></form>
+          <form className="search-box" onSubmit={(e) => { e.preventDefault(); if (!connected) setShowApproval(true); else void loadCatalogue(query); }}><Icon name="search"/><input aria-label="What are you shopping for?" value={query} onChange={(e) => setQuery(e.target.value)} /><button disabled={catalogueState === "loading"}>{catalogueState === "loading" ? `Searching ${retailers.length} stores…` : "Find my matches"}<Icon name="arrow"/></button></form>
           <div className="query-chips"><span>Try</span>{["Summer wedding", "Casual cotton with sleeves", "Colourful work dress"].map((text) => <button key={text} onClick={() => setQuery(text)}>{text}</button>)}</div>
         </section>
+        <aside className="surface-explainer"><Icon name="passport"/><div><strong>Two ways to use it</strong><span>This hub compares stores. To stay on a brand’s own website, load the extension, choose a store below and select “Use on real store”. The Passport panel appears there.</span></div></aside>
         <section className="storefront">
-          <div className="retailer-strip"><div className="retailer-tabs">{retailers.map((item) => <button key={item.id} onClick={() => selectRetailer(item.id)} className={retailerId === item.id ? "active" : ""}><span>{item.name}</span><small>Shopify UCP</small></button>)}</div><a href={retailer.url} target="_blank" rel="noreferrer">Open real store <Icon name="external"/></a></div>
-          <div className="store-heading"><div><div className="store-label"><span className="retailer-avatar">{retailer.name.slice(0, 1)}</span><p>{retailerKind(retailer)}<strong>{retailer.name} · Live catalogue</strong></p></div><div className={`native-status ${catalogueState}`}><i></i>{catalogueState === "connected" ? "Official endpoint connected" : catalogueState === "loading" ? "Calling official endpoint" : catalogueState === "error" ? "Endpoint unavailable" : "Official endpoint verified"}</div></div><div className={`passport-switch ${passportOn && isApproved ? "on" : ""}`}><div><Icon name="passport"/><span>Fashion Passport<strong>{isApproved ? (passportOn ? "Applied" : "Paused") : "Permission needed"}</strong></span></div>{isApproved ? <button role="switch" aria-checked={passportOn} onClick={() => setPassportOn(!passportOn)}><i/></button> : <button className="apply-small" onClick={() => setApprovalTarget(retailer)}>Review & apply</button>}</div></div>
-          {passportOn && isApproved ? <div className="applied-banner"><Icon name="check"/><span><strong>Passport applied.</strong> UK 10 · under £100 · personalised to your colour, shape and taste</span><button onClick={() => setView("passport")}>See profile</button></div> : <div className="permission-banner"><Icon name="lock"/><span><strong>Your Passport is private.</strong> Approve {retailer.name} once to filter and rank this page.</span><button onClick={() => setApprovalTarget(retailer)}>Review & apply <Icon name="arrow"/></button></div>}
+          <div className="retailer-strip"><div className="retailer-tabs"><button onClick={() => selectRetailer("all")} className={retailerId === "all" ? "active" : ""}><span>All {retailers.length} live stores</span><small>One cross-store search</small></button>{retailers.map((item) => <button key={item.id} onClick={() => selectRetailer(item.id)} className={retailerId === item.id ? "active" : ""}><span>{item.name}</span><small>Open UCP endpoint</small></button>)}</div>{retailer && <a href={retailer.url} target="_blank" rel="noreferrer">Use on real store <Icon name="external"/></a>}</div>
+          <div className="store-heading"><div><div className="store-label"><span className="retailer-avatar">{retailer ? retailer.name.slice(0, 1) : "18"}</span><p>{retailer ? retailerKind(retailer) : "Cross-store Shopify UCP"}<strong>{retailer ? `${retailer.name} · filtered results` : `${retailers.length} verified fashion stores · one search`}</strong></p></div><div className={`native-status ${catalogueState}`}><i></i>{catalogueState === "connected" ? `${searchStats.storesResponding} live endpoints responded` : catalogueState === "loading" ? "Calling live endpoints" : catalogueState === "error" ? "Network needs retry" : `${retailers.length} official endpoints verified`}</div></div><div className={`passport-switch ${passportOn && connected ? "on" : ""}`}><div><Icon name="passport"/><span>Fashion Passport<strong>{connected ? (passportOn ? "Connected once" : "Paused") : "Not connected"}</strong></span></div>{connected ? <button role="switch" aria-checked={passportOn} onClick={() => setPassportOn(!passportOn)}><i/></button> : <button className="apply-small" onClick={() => setShowApproval(true)}>Connect once</button>}</div></div>
+          {passportOn && connected ? <div className="applied-banner"><Icon name="check"/><span><strong>Passport connected once.</strong> It remains applied across shops, categories, queries and tab changes.</span><button onClick={() => setView("passport")}>See profile</button></div> : <div className="permission-banner"><Icon name="lock"/><span><strong>Your Passport is private.</strong> Connect it once for compatible Shopify fashion stores.</span><button onClick={() => setShowApproval(true)}>Connect once <Icon name="arrow"/></button></div>}
           {ranked.length ? <>
-            <div className="catalogue-toolbar"><p><strong>{visible.length}</strong> real products {passportOn && isApproved ? "picked for you" : "from this retailer"}</p><div><span className="snapshot-date">Live via UCP · {liveAt ? new Date(liveAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "now"}</span><select aria-label="Sort products"><option>Best match</option><option>Price low to high</option></select></div></div>
+            <div className="search-evidence"><strong>{searchStats.candidatesConsidered}</strong><span>category-correct products considered</span><strong>{searchStats.storesResponding}</strong><span>live stores responded</span><strong>{visible.length}</strong><span>best matches shown</span></div>
+            <div className="catalogue-toolbar"><p><strong>{visible.length}</strong> top matches for “{query}” {retailer ? `at ${retailer.name}` : `across ${searchStats.storesResponding} stores`}</p><div><span className="snapshot-date">Live via UCP · {liveAt ? new Date(liveAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "now"}</span><select aria-label="Sort products"><option>Best match</option><option>Price low to high</option></select></div></div>
             <div className="product-grid">{visible.map((item) => <ProductCard key={item.id} item={item} reaction={reactions[item.id]} onReact={reactTo}/>)}</div>
             {hiddenCount > 0 && !showBlocked && <button className="hidden-products" onClick={() => setShowBlocked(true)}><Icon name="shield"/><span><strong>{hiddenCount} unsuitable {hiddenCount === 1 ? "item" : "items"} hidden</strong>Wrong size, over budget or avoided material</span><span>Show anyway</span></button>}
-          </> : <section className={`live-site-only ${catalogueState === "error" ? "has-error" : ""}`}><div className="live-site-icon"><Icon name={catalogueState === "error" ? "close" : "external"} /></div><p className="eyebrow">{catalogueState === "error" ? "Live connection needs another try" : "Retailer-owned products only"}</p><h2>{catalogueState === "error" ? catalogueError : `Connect your Passport to ${retailer.name}.`}</h2><p>{catalogueState === "error" ? "No cached or invented products have replaced the retailer response." : `After one-time approval, Fashion Passport calls ${retailer.name}’s official Shopify UCP endpoint, retrieves its current products and ranks them locally.`}</p>{isApproved ? <button className="primary-button" onClick={() => void loadCatalogue(retailer.id, query)}>Retry live connection <Icon name="arrow" /></button> : <button className="primary-button" onClick={() => setApprovalTarget(retailer)}>Review & connect <Icon name="arrow" /></button>}<small>{retailer.endpoint}</small></section>}
+          </> : <section className={`live-site-only ${catalogueState === "error" ? "has-error" : ""}`}><div className="live-site-icon"><Icon name={catalogueState === "error" ? "close" : "external"} /></div><p className="eyebrow">{catalogueState === "error" ? "Live connection needs another try" : "Retailer-owned products only"}</p><h2>{catalogueState === "error" ? catalogueError : `Search ${retailers.length} live fashion stores together.`}</h2><p>{catalogueState === "error" ? "No cached or invented products have replaced the retailer response." : "Connect once. Fashion Passport calls every verified retailer-owned Shopify endpoint, enforces the requested garment category, and shows the best 30—not a sea of irrelevant stock."}</p>{connected ? <button className="primary-button" onClick={() => void loadCatalogue(query)}>Search live stores <Icon name="arrow" /></button> : <button className="primary-button" onClick={() => setShowApproval(true)}>Connect once <Icon name="arrow" /></button>}<small>For the on-site experience, load the extension and open any compatible Shopify store.</small></section>}
         </section>
       </main>}
       <footer><span>Fashion Passport</span><p>Your taste travels. Your data doesn’t.</p><div>Built for the WebMCP Challenge · 2026</div></footer>
-      {approvalTarget && <ApprovalModal retailer={approvalTarget} onApprove={approveRetailer} onClose={() => setApprovalTarget(null)}/>} 
+      {showApproval && <ApprovalModal onApprove={connectPassport} onClose={() => setShowApproval(false)}/>}
       {notice && <div className="toast"><Icon name="check"/>{notice}</div>}
     </div>
   );

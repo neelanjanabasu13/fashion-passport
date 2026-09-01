@@ -24,7 +24,8 @@ type UcpPayload = {
 };
 
 const stripHtml = (value = "") => value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-const includesAny = (text: string, values: string[]) => values.find((value) => text.includes(value));
+const escapePattern = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const includesAny = (text: string, values: string[]) => values.find((value) => new RegExp(`(^|[^a-z0-9])${escapePattern(value)}([^a-z0-9]|$)`, "i").test(text));
 
 function inferProductField(text: string, field: "colour" | "silhouette" | "neckline" | "sleeve" | "pattern" | "material" | "length") {
   const vocab = {
@@ -43,7 +44,7 @@ function inferProductField(text: string, field: "colour" | "silhouette" | "neckl
       ["Pink", ["pink"]],
       ["Orange", ["orange"]],
       ["Black", ["black"]],
-      ["White", ["white", "ivory", "cream"]],
+      ["White", ["white", "ivory", "cream", "ecru"]],
       ["Yellow", ["yellow"]],
       ["Brown", ["brown", "chocolate"]],
     ],
@@ -93,7 +94,26 @@ function inferProductField(text: string, field: "colour" | "silhouette" | "neckl
     ],
   } as const;
   for (const [label, terms] of vocab[field]) if (includesAny(text, [...terms])) return label;
-  return field === "pattern" ? "Solid" : "Not stated";
+  return "Not stated";
+}
+
+const garmentCategories = [
+  { query: ["skirt", "skirts"], product: ["skirt", "skort"] },
+  { query: ["dress", "dresses"], product: ["dress", "gown"] },
+  { query: ["top", "tops"], product: ["top", "blouse", "shirt", "bodysuit", "vest", "camisole"] },
+  { query: ["trouser", "trousers", "pants"], product: ["trouser", "pants"] },
+  { query: ["jean", "jeans", "denim"], product: ["jean", "denim"] },
+  { query: ["jumpsuit", "jumpsuits", "playsuit", "playsuits"], product: ["jumpsuit", "playsuit", "romper"] },
+  { query: ["short", "shorts"], product: ["short", "shorts"] },
+  { query: ["coat", "coats", "jacket", "jackets"], product: ["coat", "jacket", "blazer"] },
+] as const;
+
+export function matchesRequestedCategory(productName: string, query: string) {
+  const request = query.toLowerCase();
+  const requested = garmentCategories.find((category) => category.query.some((term) => new RegExp(`\\b${term}\\b`, "i").test(request)));
+  if (!requested) return true;
+  const name = productName.toLowerCase();
+  return requested.product.some((term) => new RegExp(`\\b${term}s?\\b`, "i").test(name));
 }
 
 const colourHex: Record<string, string> = {
@@ -107,8 +127,9 @@ function normaliseProduct(item: UcpProduct, retailer: Retailer): Product {
   const tags = item.tags?.join(" ") || "";
   const optionText = item.options?.flatMap((option) => option.values?.map((value) => `${option.name}:${value.label}`) || []).join(" ") || "";
   const description = stripHtml(item.description?.html);
-  const text = `${item.title || ""} ${description} ${tags} ${optionText}`.toLowerCase();
-  const colour = inferProductField(text, "colour");
+  const titleText = (item.title || "").toLowerCase();
+  const text = `${titleText} ${description} ${tags} ${optionText}`.toLowerCase();
+  const colour = inferProductField(titleText, "colour");
   const availableVariants = item.variants?.filter((variant) => variant.availability?.available !== false) || [];
   const sizeLabels = availableVariants.flatMap((variant) => variant.options?.filter((option) => option.name?.toLowerCase() === "size").map((option) => option.label || "") || []).filter(Boolean);
   const fallbackSizes = item.options?.find((option) => option.name?.toLowerCase() === "size")?.values?.map((value) => value.label || "").filter(Boolean) || [];
@@ -123,10 +144,10 @@ function normaliseProduct(item: UcpProduct, retailer: Retailer): Product {
     price: Math.round(((item.price_range?.min?.amount || 0) / 100) * 100) / 100,
     colour,
     hex: colourHex[colour] || colourHex["Not stated"],
-    silhouette: inferProductField(text, "silhouette"),
-    neckline: inferProductField(text, "neckline"),
-    sleeve: inferProductField(text, "sleeve"),
-    pattern: inferProductField(text, "pattern"),
+    silhouette: inferProductField(titleText, "silhouette"),
+    neckline: inferProductField(titleText, "neckline"),
+    sleeve: inferProductField(titleText, "sleeve"),
+    pattern: inferProductField(titleText, "pattern"),
     material: inferProductField(text, "material"),
     length: inferProductField(text, "length"),
     sizes: Array.from(new Set((sizeLabels.length ? sizeLabels : fallbackSizes).map((size) => /^\d+$/.test(size) ? `UK ${size}` : size))),
@@ -149,7 +170,7 @@ function approvedPassportIntent(profile: FashionProfile) {
   ].join("; ");
 }
 
-export async function searchShopifyCatalog(retailer: Retailer, query: string, profile?: FashionProfile) {
+export async function searchShopifyCatalog(retailer: Retailer, query: string, profile?: FashionProfile, limit = 24) {
   const context = profile ? { address_country: "GB", language: "en-GB", currency: "GBP", intent: approvedPassportIntent(profile) } : { address_country: "GB", language: "en-GB", currency: "GBP" };
   const body = {
     jsonrpc: "2.0",
@@ -159,7 +180,7 @@ export async function searchShopifyCatalog(retailer: Retailer, query: string, pr
       name: "search_catalog",
       arguments: {
         meta: { "ucp-agent": { profile: AGENT_PROFILE } },
-        catalog: { query, context, pagination: { limit: 18 } },
+        catalog: { query, context, pagination: { limit: Math.max(1, Math.min(limit, 40)) } },
       },
     },
   };
@@ -177,5 +198,7 @@ export async function searchShopifyCatalog(retailer: Retailer, query: string, pr
   if (!text) throw new Error(`${retailer.name} returned no catalogue payload`);
   const payload = JSON.parse(text) as UcpPayload;
   if (payload.ucp?.status !== "success") throw new Error(`${retailer.name} did not return a successful UCP response`);
-  return (payload.products || []).map((item) => normaliseProduct(item, retailer)).filter((item) => item.productUrl && item.imageUrl);
+  return (payload.products || [])
+    .map((item) => normaliseProduct(item, retailer))
+    .filter((item) => item.productUrl && item.imageUrl && matchesRequestedCategory(item.name, query));
 }
