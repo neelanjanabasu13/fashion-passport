@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "Fashion Passport",
+  "description": "Carry your fashion size, taste and suitability profile across retailers.",
+  "version": "0.1.0",
+  "minimum_chrome_version": "152",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://*.asos.com/*",
+    "https://*.next.co.uk/*",
+    "https://*.jigsaw-online.com/*",
+    "https://*.jovonnalondon.com/*",
+    "https://*.vinted.co.uk/*",
+    "https://*.johnlewis.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://*.asos.com/*", "https://*.next.co.uk/*", "https://*.jigsaw-online.com/*", "https://*.jovonnalondon.com/*", "https://*.vinted.co.uk/*", "https://*.johnlewis.com/*"],
+      "js": ["page-tools.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://*.asos.com/*", "https://*.next.co.uk/*", "https://*.jigsaw-online.com/*", "https://*.jovonnalondon.com/*", "https://*.vinted.co.uk/*", "https://*.johnlewis.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle",
+      "world": "ISOLATED"
+    }
+  ],
+  "action": { "default_title": "Fashion Passport" }
+}
+
