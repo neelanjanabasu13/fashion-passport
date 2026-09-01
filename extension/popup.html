@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fashion Passport</title><link rel="stylesheet" href="popup.css"></head>
+  <body>
+    <header><span>FP</span><div><small>Fashion Passport</small><strong>Travel mode</strong></div></header>
+    <main>
+      <section id="status" class="status"><i></i><div><strong>Checking Passport…</strong><span></span></div></section>
+      <p class="intro">Open a real retailer below. The Passport appears on the store itself and uses the same connection everywhere.</p>
+      <div class="journey"><span>1</span><b>Jigsaw</b><em>→</em><span>2</span><b>Lucy & Yak</b><small>No second approval</small></div>
+      <div class="stores">
+        <button data-url="https://www.jigsaw-online.com/collections/dresses">Open Jigsaw <b>↗</b></button>
+        <button data-url="https://lucyandyak.com/collections/dresses">Open Lucy & Yak <b>↗</b></button>
+        <button data-url="https://ohpolly.com/collections/dresses">Open Oh Polly <b>↗</b></button>
+        <button data-url="https://rixolondon.com">Open RIXO <b>↗</b></button>
+      </div>
+      <button id="disconnect" class="disconnect" hidden>Disconnect Passport</button>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

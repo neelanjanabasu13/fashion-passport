@@ -4,6 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Fashion Passport — your taste, everywhere",
   description: "A portable personal relevance layer for fashion shopping, powered by WebMCP.",
+  other: { "fashion-passport-app": "true" },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

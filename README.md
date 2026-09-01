@@ -21,10 +21,10 @@ Fashion Passport makes that context portable.
 
 The repository contains two complementary surfaces:
 
-1. **Next.js demonstrator** — the Passport office and live multi-store search. One server route speaks Shopify UCP, normalises current retailer-owned products, and applies the transparent personal ranking engine after one-time consent.
-2. **Chrome extension** — the portability proof. It discovers the current store's official Shopify UCP endpoint at runtime, stays invisible on unsupported sites, asks for one-time permission, and opens an on-store panel of real ranked products. It also exposes Passport actions to browser agents through WebMCP.
+1. **Next.js Passport office** — real-product taste onboarding, the Travel launcher and a secondary live multi-store comparison. Onboarding anonymously retrieves distinct garments from retailer catalogues; no cartoon garments or profile sharing are involved.
+2. **Chrome extension** — the primary portability proof. It discovers the current store's official Shopify UCP endpoint at runtime, stays invisible on unsupported sites and opens an on-store panel of real ranked products. The one-time site approval synchronises into extension storage, so the Passport follows the user to the next compatible store without another prompt.
 
-The web demonstrator currently searches 18 directly verified live fashion endpoints with one adapter. A test skirt query on 1 September 2026 considered 334 category-correct products from 16 responding stores, with zero dresses or tops admitted. The stores are examples, not separate integrations: the extension discovers and uses the same UCP tools on any compatible HTTPS Shopify storefront. No paid API, product feed, licensed styling database or retained photo is required.
+The web demonstrator currently searches an 18-store directly verified **test panel** with one adapter. A test skirt query on 1 September 2026 considered 334 category-correct products from 16 responding stores, with zero dresses or tops admitted. This panel proves breadth but does not define reach: Travel mode accepts any store the user chooses and the extension discovers its compatibility at runtime. Searching every Shopify store at once would require a merchant directory and a global index; Shopify exposes per-store endpoints, not a public global catalogue endpoint. No paid API, product feed, licensed styling database or retained photo is required.
 
 ### WebMCP tools
 
@@ -62,6 +62,7 @@ npm run lint
 npm run build
 node --check extension/content.js
 node --check extension/page-tools.js
+node --check extension/popup.js
 ```
 
 ## Load the Chrome extension
@@ -70,7 +71,7 @@ node --check extension/page-tools.js
 2. Enable **Developer mode**.
 3. Select **Load unpacked**.
 4. Choose this repository’s `extension` directory.
-5. Open a compatible Shopify fashion storefront.
+5. Reload the extension after code updates, then click its toolbar icon to open the Jigsaw → Lucy & Yak travel demo.
 6. Fashion Passport anonymously checks for the standard UCP tools. It renders nothing if the endpoint is absent.
 7. Select the Fashion Passport control and review exactly what will be shared. This is the single connection prompt; subsequent compatible stores and category changes do not ask again.
 8. The extension calls the retailer-owned live catalogue and opens an on-site ranked results panel.
@@ -124,7 +125,7 @@ The current demonstrator keeps its compact vocabulary in the repository so it re
 
 ## Status
 
-This is a demonstrator-class submission for the 2026 WebMCP Challenge. Retailer product cards are retrieved live through retailer-owned Shopify UCP endpoints; there is no static product fallback. Abstract SVG garments appear only in the clearly labelled preference-learning exercise. The extension proves the same Passport can travel to compatible real storefronts without retailer-specific DOM adapters.
+This is a demonstrator-class submission for the 2026 WebMCP Challenge. Onboarding and shopping cards are retrieved live through retailer-owned Shopify UCP endpoints; there is no static product fallback. The extension proves the same Passport can travel to compatible real storefronts without retailer-specific DOM adapters.
 
 ## License
 

@@ -52,7 +52,16 @@ export function scoreProduct(product: Product, profile: FashionProfile, learnedA
     positive(`Balances an ${profile.bodyShape.toLowerCase()} shape`, 4, "theory");
   }
 
-  const learnedHits = learnedAvoid.filter((trait) =>
+  const learnedLikes = learnedAvoid.filter((trait) => trait.startsWith("love:")).map((trait) => trait.slice(5));
+  const learnedDislikes = learnedAvoid.filter((trait) => trait.startsWith("avoid:")).map((trait) => trait.slice(6)).concat(learnedAvoid.filter((trait) => !trait.includes(":")));
+  const learnedLikeHits = learnedLikes.filter((trait) =>
+    [product.colour, product.silhouette, product.neckline, product.sleeve, product.pattern, product.material, product.length]
+      .map(normalise)
+      .includes(normalise(trait)),
+  );
+  if (learnedLikeHits.length) positive(`More ${learnedLikeHits[0]} after your feedback`, 6);
+
+  const learnedHits = learnedDislikes.filter((trait) =>
     [product.colour, product.silhouette, product.neckline, product.sleeve, product.pattern, product.material, product.length]
       .map(normalise)
       .includes(normalise(trait)),
