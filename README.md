@@ -21,7 +21,7 @@ Fashion Passport makes that context portable.
 
 The repository contains two complementary surfaces:
 
-1. **Next.js demonstrator** — the complete product story, including the Passport, retailer consent, ranking explanations, frictionless taste learning, privacy controls and six simulated retailer catalogues.
+1. **Next.js demonstrator** — the complete product story, including the Passport, retailer consent, ranking explanations, frictionless taste learning, privacy controls and verified real-product snapshots from ASOS, Jigsaw and Jovonna London.
 2. **Chrome extension** — the portability proof. It runs on the six real retailer domains, asks for one-time permission, annotates and reranks product tiles, and exposes Passport actions to browser agents through WebMCP.
 
 No paid API, product feed, licensed styling database or retained photo is required.
@@ -72,7 +72,7 @@ node --check extension/page-tools.js
 5. Open one of the supported dress category pages.
 6. Select the Fashion Passport control at the bottom-right, review the Passport, and approve the retailer.
 
-Supported demonstrator domains:
+Supported retailer domains:
 
 - ASOS
 - Next
@@ -80,6 +80,8 @@ Supported demonstrator domains:
 - Jovonna London
 - Vinted UK
 - John Lewis
+
+The standalone app never invents inventory under a retailer’s name. ASOS, Jigsaw and Jovonna cards use real public retailer metadata, retailer-hosted images and links to the real items, retrieved on 1 September 2026. Next, Vinted and John Lewis are demonstrated directly on their real pages through the extension because they do not expose a suitable stable public feed.
 
 Retailer markup changes over time. Each domain has a small selector adapter in [`extension/content.js`](extension/content.js), followed by conservative fallbacks. The extension never sends page behaviour to a server.
 
@@ -126,9 +128,8 @@ The current demonstrator keeps its compact vocabulary in the repository so it re
 
 ## Status
 
-This is a demonstrator-class submission for the 2026 WebMCP Challenge. Product information shown inside the web app is illustrative. The extension is the real-site interoperability layer.
+This is a demonstrator-class submission for the 2026 WebMCP Challenge. Retailer product cards are dated public snapshots and link back to their source items. Abstract SVG garments appear only in the clearly labelled preference-learning exercise. The extension is the live real-site interoperability layer.
 
 ## License
 
 [MIT](LICENSE)
-
