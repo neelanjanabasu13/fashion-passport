@@ -129,6 +129,7 @@ function normaliseProduct(item: UcpProduct, retailer: Retailer): Product {
   const description = stripHtml(item.description?.html);
   const titleText = (item.title || "").toLowerCase();
   const text = `${titleText} ${description} ${tags} ${optionText}`.toLowerCase();
+  const attributeText = `${titleText} ${tags} ${optionText}`.toLowerCase();
   const colour = inferProductField(titleText, "colour");
   const availableVariants = item.variants?.filter((variant) => variant.availability?.available !== false) || [];
   const sizeLabels = availableVariants.flatMap((variant) => variant.options?.filter((option) => option.name?.toLowerCase() === "size").map((option) => option.label || "") || []).filter(Boolean);
@@ -144,12 +145,12 @@ function normaliseProduct(item: UcpProduct, retailer: Retailer): Product {
     price: Math.round(((item.price_range?.min?.amount || 0) / 100) * 100) / 100,
     colour,
     hex: colourHex[colour] || colourHex["Not stated"],
-    silhouette: inferProductField(titleText, "silhouette"),
-    neckline: inferProductField(titleText, "neckline"),
-    sleeve: inferProductField(titleText, "sleeve"),
-    pattern: inferProductField(titleText, "pattern"),
+    silhouette: inferProductField(attributeText, "silhouette"),
+    neckline: inferProductField(attributeText, "neckline"),
+    sleeve: inferProductField(attributeText, "sleeve"),
+    pattern: inferProductField(attributeText, "pattern"),
     material: inferProductField(text, "material"),
-    length: inferProductField(text, "length"),
+    length: inferProductField(attributeText, "length"),
     sizes: Array.from(new Set((sizeLabels.length ? sizeLabels : fallbackSizes).map((size) => /^\d+$/.test(size) ? `UK ${size}` : size))),
     imageUrl: media,
     productUrl: item.url,

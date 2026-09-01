@@ -1,15 +1,16 @@
 import { demoProfile, retailers } from "@/lib/data";
 import { searchShopifyCatalog } from "@/lib/shopify";
+import type { FashionProfile } from "@/lib/types";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as { retailerId?: string; query?: string; sharePassport?: boolean };
+    const body = await request.json() as { retailerId?: string; query?: string; sharePassport?: boolean; profile?: FashionProfile };
     const retailer = retailers.find((item) => item.id === body.retailerId);
     if (!retailer) return Response.json({ error: "Unknown retailer" }, { status: 400 });
     const query = body.query?.trim().slice(0, 160) || "midi dress";
-    const products = await searchShopifyCatalog(retailer, query, body.sharePassport ? demoProfile : undefined);
+    const products = await searchShopifyCatalog(retailer, query, body.sharePassport ? body.profile || demoProfile : undefined);
     return Response.json({
       status: "connected",
       protocol: "Shopify UCP/MCP 2026-04-08",

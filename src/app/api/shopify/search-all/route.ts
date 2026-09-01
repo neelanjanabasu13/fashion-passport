@@ -1,16 +1,18 @@
 import { demoProfile, retailers } from "@/lib/data";
 import { searchShopifyCatalog } from "@/lib/shopify";
+import type { FashionProfile } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as { query?: string; sharePassport?: boolean };
+    const body = await request.json() as { query?: string; sharePassport?: boolean; profile?: FashionProfile };
     const query = body.query?.trim().slice(0, 160) || "midi dress";
+    const sharedProfile = body.sharePassport ? body.profile || demoProfile : undefined;
     const results = await Promise.all(retailers.map(async (retailer) => {
       try {
-        const products = await searchShopifyCatalog(retailer, query, body.sharePassport ? demoProfile : undefined, 30);
+        const products = await searchShopifyCatalog(retailer, query, sharedProfile, 30);
         return { retailer, products };
       } catch (error) {
         return { retailer, products: [], error: error instanceof Error ? error.message : "Retailer unavailable" };

@@ -6,8 +6,9 @@
   const host = location.hostname.replace(/^www\./, "");
   const approvalKey = "fashion-passport:connected-once";
   const signalKey = "fashion-passport:learned-signals";
+  const profileKey = "fashion-passport:profile";
   const agentProfile = "https://shopify.dev/ucp/agent-profiles/examples/2026-08-25/valid-with-capabilities.json";
-  const profile = {
+  let profile = {
     size: "UK 10", heightCm: 163, budget: 100, season: "Deep Winter", shape: "Inverted triangle",
     love: ["red", "ruby", "burgundy", "pink", "jewel", "navy", "emerald", "camel", "orange", "terracotta", "a-line", "fit and flare", "flowy", "square neck", "boat neck", "scoop neck", "midi", "silk", "linen", "cotton", "chiffon", "ditsy", "gingham", "plaid"],
     avoid: ["polyester", "boxy", "structured", "cowl", "cap sleeve", "olive", "grey", "gray", "taupe", "animal print", "leopard", "snake print"]
@@ -36,6 +37,22 @@
     return "women's clothing";
   };
   const fullIntent = () => `Shopper explicitly approved sharing this Fashion Passport: ${profile.size}, ${profile.heightCm} cm; ${profile.season}; ${profile.shape}; loves ${profile.love.join(", ")}; avoids ${profile.avoid.join(", ")}; budget GBP ${profile.budget}`;
+  const theoryTerms = () => {
+    const colours = {
+      "Deep Winter": ["black", "white", "red", "dark pink", "jewel", "navy", "cobalt", "emerald", "blue"],
+      "Soft Summer": ["blue", "grey", "pink", "white", "taupe", "green"],
+      "Warm Spring": ["red", "burnt orange", "yellow", "green", "pink", "camel"],
+      "Deep Autumn": ["terracotta", "rust", "burnt orange", "camel", "olive", "brown", "jewel"],
+    };
+    const shapes = {
+      "Inverted triangle": ["a-line", "fit and flare", "flowy", "v-neck", "scoop", "asymmetric"],
+      Pear: ["a-line", "fit and flare", "structured", "boat neck", "square neck", "cowl"],
+      Hourglass: ["fit and flare", "structured", "a-line", "v-neck", "scoop", "square neck"],
+      Rectangle: ["fit and flare", "flowy", "structured", "asymmetric", "cowl", "scoop"],
+      Apple: ["flowy", "a-line", "structured", "v-neck", "scoop", "asymmetric"],
+    };
+    return [...(colours[profile.season] || []), ...(shapes[profile.shape] || [])];
+  };
 
   const rpc = async (method, params) => {
     const response = await fetch(endpoint, {
@@ -77,9 +94,11 @@
 
   const analyse = (item) => {
     const text = productText(item);
-    const titleText = String(item.title || "").toLowerCase();
-    const loves = profile.love.filter((term) => hasTerm(titleText, term));
-    const avoids = [...profile.avoid, ...learnedSignals].filter((term) => hasTerm(text, term));
+    const learnedLikes = learnedSignals.filter((term) => term.startsWith("love:")).map((term) => term.slice(5).toLowerCase());
+    const learnedAvoids = learnedSignals.filter((term) => term.startsWith("avoid:")).map((term) => term.slice(6).toLowerCase());
+    const loves = [...profile.love, ...learnedLikes].filter((term) => hasTerm(text, term));
+    const theoryHits = theoryTerms().filter((term) => hasTerm(text, term));
+    const avoids = [...profile.avoid, ...learnedAvoids].filter((term) => hasTerm(text, term));
     const price = money(item.price_range?.min?.amount);
     const sizeOptions = (item.variants || []).filter((variant) => variant.availability?.available !== false).flatMap((variant) => (variant.options || []).filter((option) => option.name?.toLowerCase() === "size").map((option) => option.label));
     const hasSizeData = sizeOptions.length > 0;
@@ -87,11 +106,12 @@
     const overBudget = price > profile.budget;
     const blocked = avoids.includes("polyester") || overBudget || (hasSizeData && !hasSize);
     const uniqueLoves = [...new Set(loves)].slice(0, 3);
-    const score = Math.max(18, Math.min(97, 64 + uniqueLoves.length * 8 - avoids.length * 12 - (overBudget ? 22 : 0) - (hasSizeData && !hasSize ? 30 : 0)));
+    const score = Math.max(18, Math.min(97, 58 + uniqueLoves.length * 9 + Math.min(theoryHits.length, 2) * 5 - avoids.length * 12 - (overBudget ? 22 : 0) - (hasSizeData && !hasSize ? 30 : 0)));
     const reasons = [];
     if (hasSize) reasons.push("UK 10 available");
     if (uniqueLoves[0]) reasons.push(`Matches your ${uniqueLoves[0]} preference`);
     if (uniqueLoves[1]) reasons.push(`Also ${uniqueLoves[1]}`);
+    if (theoryHits[0]) reasons.push(`Likely to suit your ${profile.season} / ${profile.shape} profile`);
     if (!overBudget) reasons.push(`Within £${profile.budget} budget`);
     if (overBudget) reasons.push(`Over £${profile.budget} budget`);
     if (avoids[0]) reasons.push(`Contains avoided ${avoids[0]}`);
@@ -160,8 +180,12 @@
 
   const syncPassportApp = async () => {
     const connected = localStorage.getItem("fashion-passport:connected") === "true";
+    let savedProfile;
+    let savedSignals;
+    try { savedProfile = JSON.parse(localStorage.getItem(profileKey) || "null"); } catch { savedProfile = null; }
+    try { savedSignals = JSON.parse(localStorage.getItem("fashion-passport:learned-avoid") || "[]"); } catch { savedSignals = []; }
     approved = connected;
-    await chrome.storage.local.set({ [approvalKey]: connected });
+    await chrome.storage.local.set({ [approvalKey]: connected, [signalKey]: Array.isArray(savedSignals) ? savedSignals : [], ...(savedProfile ? { [profileKey]: savedProfile } : {}) });
   };
 
   const init = async () => {
@@ -173,7 +197,16 @@
     const compatible = await probe();
     if (!compatible) return;
     retailerName = merchantName();
-    const saved = await chrome.storage.local.get([approvalKey, signalKey]); approved = saved[approvalKey] === true; learnedSignals = Array.isArray(saved[signalKey]) ? saved[signalKey] : [];
+    const saved = await chrome.storage.local.get([approvalKey, signalKey, profileKey]); approved = saved[approvalKey] === true; learnedSignals = Array.isArray(saved[signalKey]) ? saved[signalKey] : [];
+    if (saved[profileKey]) {
+      const stored = saved[profileKey];
+      profile = {
+        size: stored.size || profile.size, heightCm: stored.heightCm || profile.heightCm, budget: stored.budget || profile.budget,
+        season: stored.colourSeason || profile.season, shape: stored.bodyShape || profile.shape,
+        love: [...(stored.colours?.love || []), ...(stored.silhouettes?.love || []), ...(stored.necklines?.love || []), ...(stored.sleeves?.love || []), ...(stored.patterns?.love || []), ...(stored.materials?.love || []), ...(stored.lengths?.love || [])].map((item) => String(item).toLowerCase()),
+        avoid: [...(stored.colours?.avoid || []), ...(stored.silhouettes?.avoid || []), ...(stored.necklines?.avoid || []), ...(stored.sleeves?.avoid || []), ...(stored.patterns?.avoid || []), ...(stored.materials?.avoid || []), ...(stored.lengths?.avoid || [])].map((item) => String(item).toLowerCase()),
+      };
+    }
     document.documentElement.dataset.fashionPassportCompatible = "true";
     document.documentElement.dataset.fashionPassportEndpoint = endpoint;
     document.documentElement.dataset.fashionPassportApproved = String(approved);
