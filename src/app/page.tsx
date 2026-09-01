@@ -6,11 +6,14 @@ import { DressArt } from "@/components/dress-art";
 import { Icon } from "@/components/icons";
 import { demoProfile, retailers } from "@/lib/data";
 import { rankProducts } from "@/lib/scoring";
-import type { Product, Retailer, ScoredProduct } from "@/lib/types";
+import { inferColourSeason, theoryFor } from "@/lib/style-theory";
+import type { FashionProfile, Product, Retailer, ScoredProduct } from "@/lib/types";
 
 const STORE_CONNECTED = "fashion-passport:connected";
-const STORE_ONBOARDED = "fashion-passport:onboarded";
+const STORE_ONBOARDED = "fashion-passport:onboarded-v2";
 const STORE_SIGNALS = "fashion-passport:learned-avoid";
+const STORE_PROFILE = "fashion-passport:profile";
+const STORE_TASTE_VOTES = "fashion-passport:taste-votes";
 
 type View = "travel" | "shop" | "passport" | "taste" | "privacy";
 type Reaction = "up" | "down";
@@ -45,7 +48,7 @@ function ProductCard({ item, reaction, onReact }: { item: ScoredProduct; reactio
   );
 }
 
-function ApprovalModal({ onApprove, onClose }: { onApprove: () => void; onClose: () => void }) {
+function ApprovalModal({ profile, onApprove, onClose }: { profile: FashionProfile; onApprove: () => void; onClose: () => void }) {
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section className="approval-modal" role="dialog" aria-modal="true" aria-labelledby="approval-title">
@@ -55,9 +58,9 @@ function ApprovalModal({ onApprove, onClose }: { onApprove: () => void; onClose:
         <h2 id="approval-title">Connect your Passport once?</h2>
         <p className="modal-lede">This single approval lets Fashion Passport apply your profile when you search compatible Shopify fashion stores. It will not ask again for every shop, category or query. Browsing history stays here.</p>
         <div className="share-preview">
-          <div><span>Size & fit</span><strong>UK 10 · 163 cm</strong></div>
-          <div><span>Style context</span><strong>Deep Winter · Inverted triangle</strong></div>
-          <div><span>Taste & limits</span><strong>Colours, cuts, fabric · £100 max</strong></div>
+          <div><span>Size & fit</span><strong>{profile.size} · {profile.heightCm} cm</strong></div>
+          <div><span>Suitability guidance</span><strong>{profile.colourSeason} · {profile.bodyShape}</strong></div>
+          <div><span>Taste & limits</span><strong>Personal choices · £{profile.budget} max</strong></div>
         </div>
         <div className="local-note"><Icon name="shield" /><span><strong>Your signals stay local.</strong> Likes, skips and browsing behaviour remain in this browser.</span></div>
         <button className="primary-button wide" onClick={onApprove}>Connect my Passport once<Icon name="arrow" /></button>
@@ -67,26 +70,30 @@ function ApprovalModal({ onApprove, onClose }: { onApprove: () => void; onClose:
   );
 }
 
-function PassportView() {
-  const groups = [
-    ["Colour", ["Deep Winter", "Red", "Burnt orange", "Jewel tones", "Dark pink", "Camel"]],
-    ["Shape & fit", ["Inverted triangle", "Flowy", "A-line", "Fit and flare", "Midi"]],
-    ["Details", ["Square neck", "Boat neck", "Scoop neck", "Long sleeve", "Sleeveless"]],
-    ["Fabric & print", ["Silk", "Pure cotton", "Linen", "Chiffon", "Ditsy", "Gingham", "Plaid"]],
+function PassportView({ profile, onRebuild }: { profile: FashionProfile; onRebuild: () => void }) {
+  const theory = theoryFor(profile.colourSeason, profile.bodyShape);
+  const preferenceGroups = [
+    ["Colours I choose", profile.colours.love],
+    ["Cuts I choose", [...profile.silhouettes.love, ...profile.necklines.love, ...profile.lengths.love]],
+    ["Details I choose", [...profile.sleeves.love, ...profile.patterns.love]],
+    ["Fabrics I choose", profile.materials.love],
   ] as const;
   return (
     <main className="secondary-page">
-      <div className="page-heading"><p className="eyebrow">Your portable context</p><h1>One passport. Every shop.</h1><p>What suits you and what you actually like, kept separate so your taste always wins.</p></div>
+      <div className="page-heading"><p className="eyebrow">Womenswear Passport · Menswear coming soon</p><h1>What suits you.<br/>What you choose.</h1><p>Two distinct datasets travel together. Guidance helps when you are unsure; your stated taste wins whenever they disagree.</p></div>
       <div className="passport-layout">
         <aside className="passport-card">
           <div className="passport-watermark">FP</div><Icon name="passport" className="passport-mark" />
-          <p>Fashion Passport</p><h2>Demo shopper</h2>
-          <dl><div><dt>Home</dt><dd>United Kingdom</dd></div><div><dt>Size</dt><dd>UK 10</dd></div><div><dt>Height</dt><dd>163 cm</dd></div></dl>
+          <p>Fashion Passport</p><h2>{profile.label}</h2>
+          <dl><div><dt>Home</dt><dd>{profile.country}</dd></div><div><dt>Size</dt><dd>{profile.size}</dd></div><div><dt>Height</dt><dd>{profile.heightCm} cm</dd></div></dl>
           <div className="passport-status"><span></span>Private & ready</div>
         </aside>
         <section className="profile-groups">
-          {groups.map(([title, values]) => <div className="profile-group" key={title}><div className="profile-title"><h3>{title}</h3><button>Edit</button></div><div className="tag-cloud">{values.map((value, index) => <span className={index === 0 ? "theory-tag" : ""} key={value}>{value}{index > 0 && <small>♥</small>}</span>)}</div></div>)}
-          <div className="override-callout"><Icon name="sparkle" /><div><strong>Your taste outranks the rulebook</strong><p>Burnt orange, terracotta and camel stay prioritised because you love them—even when colour theory disagrees.</p></div></div>
+          <div className="profile-layer theory-layer"><div className="profile-title"><div><small>01 · GUIDANCE</small><h3>Likely to suit you</h3></div><button onClick={onRebuild}>Retake</button></div><p>Derived from your proportions, undertone, skin depth and contrast—not from what a model is wearing.</p><div className="theory-results"><span><strong>{profile.bodyShape}</strong> proportions</span><span><strong>{profile.colourSeason}</strong> colouring</span></div><div className="tag-cloud">{[...theory.colours, ...theory.silhouettes, ...theory.necklines].map((value) => <span className="theory-tag" key={value}>{value}</span>)}</div></div>
+          <div className="layer-join"><span>+</span><strong>married to</strong></div>
+          <div className="profile-layer preference-layer"><div className="profile-title"><div><small>02 · PERSONAL TASTE</small><h3>What you actually choose</h3></div><button onClick={onRebuild}>Teach more</button></div><p>Learned from real products across retailers. These choices overrule the guidance layer.</p></div>
+          {preferenceGroups.map(([title, values]) => <div className="profile-group" key={title}><div className="profile-title"><h3>{title}</h3></div><div className="tag-cloud">{values.map((value) => <span key={value}>{value}<small>♥</small></span>)}</div></div>)}
+          <div className="override-callout"><Icon name="sparkle" /><div><strong>Your taste outranks the guidance</strong><p>For example, burnt orange, terracotta and camel remain prioritised because you love them—even if your colour result suggests otherwise.</p></div></div>
           <div className="avoid-row"><strong>Always avoid</strong><div>{["Polyester", "Boxy", "Cowl neck", "Olive", "Grey", "Taupe"].map(x => <span key={x}>− {x}</span>)}</div></div>
         </section>
       </div>
@@ -118,47 +125,80 @@ function TravelView({ connected, onConnect, onCompare }: { connected: boolean; o
   );
 }
 
-function TasteView({ onDone }: { onDone: () => void }) {
+function TasteView({ profile, onProfile, onDone }: { profile: FashionProfile; onProfile: (profile: FashionProfile) => void; onDone: () => void }) {
+  const [stage, setStage] = useState<"intro" | "body" | "colour" | "result" | "taste">("intro");
+  const [bodyShape, setBodyShape] = useState("");
+  const [undertone, setUndertone] = useState("");
+  const [depth, setDepth] = useState("");
+  const [contrast, setContrast] = useState("");
+  const [knownSeason, setKnownSeason] = useState("");
   const [choices, setChoices] = useState<Product[]>([]);
   const [index, setIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [sources, setSources] = useState(0);
+  const [reactionNote, setReactionNote] = useState("");
   useEffect(() => {
     const controller = new AbortController();
     const load = async () => {
       try {
         const response = await fetch("/api/shopify/taste", { signal: controller.signal });
-        const payload = await response.json() as { products?: Product[] };
+        const payload = await response.json() as { products?: Product[]; sources?: number };
         const seen = new Set((JSON.parse(localStorage.getItem("fashion-passport:taste-onboarding") || "[]") as { productId: string }[]).map((item) => item.productId));
-        setChoices((payload.products || []).filter((product) => !seen.has(product.id)).slice(0, 12));
+        setChoices((payload.products || []).filter((product) => !seen.has(product.id)).slice(0, 36));
+        setSources(payload.sources || 0);
       } catch { if (!controller.signal.aborted) setChoices([]); }
       finally { if (!controller.signal.aborted) setLoading(false); }
     };
     void load();
     return () => controller.abort();
   }, []);
+  const estimatedSeason = knownSeason || inferColourSeason(undertone, contrast, depth);
+  const derivedProfile = { ...profile, colourSeason: estimatedSeason, bodyShape: bodyShape || profile.bodyShape };
+  const applyGuidance = () => {
+    onProfile(derivedProfile);
+    localStorage.setItem(STORE_PROFILE, JSON.stringify(derivedProfile));
+    document.dispatchEvent(new Event("fashion-passport:connection-changed"));
+    setStage("result");
+  };
   const current = choices[index];
   const react = (reaction: Reaction) => {
     if (!current) return;
     const saved = JSON.parse(localStorage.getItem("fashion-passport:taste-onboarding") || "[]") as { productId: string; reaction: Reaction }[];
     localStorage.setItem("fashion-passport:taste-onboarding", JSON.stringify([...saved.filter((item) => item.productId !== current.id), { productId: current.id, reaction }]));
     const traits = [current.colour, current.silhouette, current.neckline, current.sleeve, current.pattern, current.material, current.length].filter((trait) => trait !== "Not stated");
-    const signals = JSON.parse(localStorage.getItem(STORE_SIGNALS) || "[]") as string[];
-    localStorage.setItem(STORE_SIGNALS, JSON.stringify(Array.from(new Set([...signals, ...traits.map((trait) => `${reaction === "up" ? "love" : "avoid"}:${trait}`)]))));
+    const votes = JSON.parse(localStorage.getItem(STORE_TASTE_VOTES) || "{}") as Record<string, { up: number; down: number }>;
+    traits.forEach((trait) => { const tally = votes[trait] || { up: 0, down: 0 }; tally[reaction] += 1; votes[trait] = tally; });
+    localStorage.setItem(STORE_TASTE_VOTES, JSON.stringify(votes));
+    const signals = Object.entries(votes).flatMap(([trait, tally]) => tally.up - tally.down >= 2 ? [`love:${trait}`] : tally.down - tally.up >= 2 ? [`avoid:${trait}`] : []);
+    localStorage.setItem(STORE_SIGNALS, JSON.stringify(signals));
+    const theoryReason = rankProducts([current], profile)[0]?.reasons.find((reason) => reason.kind === "theory");
+    setReactionNote(reaction === "down" && theoryReason ? "Got it. Your preference overrides the suitability suggestion." : reaction === "up" ? "Saved. We wait for a pattern before changing your profile." : "Saved. One dislike will not blacklist every feature on this item.");
     setIndex((n) => n + 1);
   };
+  const bodyOptions = [
+    ["Inverted triangle", "Shoulders are wider than hips"], ["Pear", "Hips are wider than shoulders"],
+    ["Hourglass", "Shoulders and hips balance; waist is defined"], ["Rectangle", "Shoulders and hips balance; waist is subtle"],
+    ["Apple", "Midsection is the fullest point"],
+  ];
+  const theory = theoryFor(derivedProfile.colourSeason, derivedProfile.bodyShape);
   return (
-    <main className="taste-page">
-      <div className="page-heading compact"><p className="eyebrow">Real-product taste training</p><h1>Teach it by reacting.</h1><p>Real garments from live retailer catalogues. One tap teaches your taste; every product is unique and your profile is not shared during this step.</p></div>
-      <section className="taste-stage">
-        <div className="progress-meta"><span>{loading ? "Loading live products" : `${Math.min(index + 1, choices.length)} of ${choices.length}`}</span><span>Real · no repeats</span></div>
-        <div className="progress-line"><span style={{ width: `${choices.length ? Math.min(100, (index / choices.length) * 100) : 0}%` }} /></div>
-        {loading ? <div className="taste-loading">Reading live retailer catalogues…</div> : current ? <>
+    <main className="onboarding-page">
+      <div className="onboarding-progress"><span className={stage !== "intro" ? "done" : "active"}>1 · You</span><span className={["colour", "result", "taste"].includes(stage) ? "done" : stage === "body" ? "active" : ""}>2 · Shape</span><span className={["result", "taste"].includes(stage) ? "done" : stage === "colour" ? "active" : ""}>3 · Colour</span><span className={stage === "taste" ? "active" : ""}>4 · Taste</span></div>
+      {stage === "intro" && <section className="onboarding-panel intro-panel"><p className="eyebrow">Your Passport in under 2 minutes</p><h1>First, what may suit you.<br/>Then, what you love.</h1><p>We estimate a useful starting point from your proportions, undertone, skin depth and contrast. Then real-product reactions teach your taste. If the two disagree, your preference wins.</p><div className="scope-choice"><button onClick={() => setStage("body")}><span>Available now</span><strong>Womenswear</strong><small>Build my Passport →</small></button><button disabled><span>Coming soon</span><strong>Menswear</strong><small>The same portable profile model</small></button></div><div className="two-layer-proof"><div><strong>01</strong><span>Suitability guidance<small>Body + colouring</small></span></div><b>+</b><div><strong>02</strong><span>Personal preference<small>Real-product reactions</small></span></div><b>=</b><div><strong>FP</strong><span>Your ranking<small>Preference can overrule</small></span></div></div></section>}
+      {stage === "body" && <section className="onboarding-panel question-panel"><p className="eyebrow">About 20 seconds</p><h2>Which description is closest to your proportions?</h2><p>No measurements or labels required. Choose the relationship you see most often in fitted clothing.</p><div className="answer-grid body-answers">{bodyOptions.map(([value, label]) => <button className={bodyShape === value ? "selected" : ""} key={value} onClick={() => setBodyShape(value)}><strong>{label}</strong><small>{value}</small></button>)}</div><div className="step-actions"><button className="text-button" onClick={() => setStage("intro")}>← Back</button><button className="primary-button" disabled={!bodyShape} onClick={() => setStage("colour")}>Next: colouring <Icon name="arrow"/></button></div></section>}
+      {stage === "colour" && <section className="onboarding-panel question-panel colour-panel"><p className="eyebrow">About 35 seconds</p><h2>Find your colour starting point</h2><p>These three visual signals are more useful than skin colour alone. Choose “not sure” freely—the result is guidance, not a diagnosis.</p><div className="colour-questions"><fieldset><legend>Undertone</legend><small>Which tends to make your skin look clearer?</small><div>{[["cool","Silver + optic white"],["warm","Gold + cream"],["neutral","Both / not sure"]].map(([value,label]) => <button type="button" className={undertone === value ? "selected" : ""} key={value} onClick={() => setUndertone(value)}>{label}</button>)}</div></fieldset><fieldset><legend>Skin depth</legend><small>Your natural depth, without judging undertone</small><div>{[["light","Fair / light"],["medium","Medium / olive"],["deep","Deep"]].map(([value,label]) => <button type="button" className={depth === value ? "selected" : ""} key={value} onClick={() => setDepth(value)}>{label}</button>)}</div></fieldset><fieldset><legend>Natural contrast</legend><small>Difference between hair, eyes and skin</small><div>{[["high","High / striking"],["soft","Soft / blended"],["clear","Clear / bright"]].map(([value,label]) => <button type="button" className={contrast === value ? "selected" : ""} key={value} onClick={() => setContrast(value)}>{label}</button>)}</div></fieldset></div><label className="known-season">Already know your season?<select value={knownSeason} onChange={(event) => setKnownSeason(event.target.value)}><option value="">Let Passport estimate</option>{["Deep Winter","Soft Summer","Warm Spring","Deep Autumn"].map((season) => <option key={season}>{season}</option>)}</select></label><div className="step-actions"><button className="text-button" onClick={() => setStage("body")}>← Back</button><button className="primary-button" disabled={!undertone || !depth || !contrast} onClick={applyGuidance}>See my foundation <Icon name="arrow"/></button></div></section>}
+      {stage === "result" && <section className="onboarding-panel result-panel"><p className="eyebrow">Your suitability foundation</p><h2>A starting point—not a rulebook.</h2><div className="foundation-results"><article><span>Body proportions</span><strong>{derivedProfile.bodyShape}</strong><p>Likely starting points: {theory.silhouettes.join(", ").toLowerCase()} shapes and {theory.necklines.join(", ").toLowerCase()} necklines.</p></article><article><span>Colour direction</span><strong>{derivedProfile.colourSeason}</strong><p>Likely starting points: {theory.colours.join(", ").toLowerCase()}.</p></article></div><div className="override-callout"><Icon name="sparkle"/><div><strong>You remain in charge</strong><p>If you dislike any suggestion, your thumbs-down wins. If you love something outside this guidance, Fashion Passport keeps showing it.</p></div></div><div className="step-actions"><button className="text-button" onClick={() => setStage("colour")}>Adjust answers</button><button className="primary-button" onClick={() => setStage("taste")}>Now teach my taste <Icon name="arrow"/></button></div></section>}
+      {stage === "taste" && <><div className="page-heading compact"><p className="eyebrow">Live products · {sources || "multiple"} retailer websites</p><h1>Now make it yours.</h1><p>Eight quick reactions are enough to begin. Keep going whenever you want; we learn repeated patterns instead of overreacting to one item.</p></div><section className="taste-stage">
+        <div className="progress-meta"><span>{loading ? "Loading live products" : `${Math.min(index + 1, choices.length)} of ${choices.length} available`}</span><span>{Math.min(index, 8)} / 8 quick start</span></div>
+        <div className="progress-line"><span style={{ width: `${Math.min(100, (index / 8) * 100)}%` }} /></div>
+        {loading ? <div className="taste-loading">Reading live products across Shopify retailers…</div> : current ? <>
           <div className="taste-card" key={current.id}>{current.imageUrl && <Image className="taste-real-image" src={current.imageUrl} alt={current.name} fill sizes="340px" />}<div className="taste-caption"><strong>{current.brand}</strong><span>{current.name}</span></div></div>
+          {rankProducts([current], profile)[0]?.reasons.find((reason) => reason.kind === "theory") && <div className="theory-nudge"><Icon name="sparkle"/><span><strong>Suitability signal</strong>{rankProducts([current], profile)[0].reasons.find((reason) => reason.kind === "theory")?.label}</span></div>}
           <div className="taste-actions"><button onClick={() => react("down")} aria-label="Not for me"><Icon name="thumbsDown" /><span>Not me</span></button><button className="love" onClick={() => react("up")} aria-label="Love it"><Icon name="thumbsUp" /><span>Love it</span></button></div>
-          <p className="microcopy">Stored locally. This product will not appear again.</p>
-          {index >= 5 && <button className="text-button taste-finish" onClick={onDone}>That’s enough for now →</button>}
-        </> : <div className="taste-complete"><div className="approval-icon"><Icon name="check" /></div><h2>Taste pass complete</h2><p>Your distinct reactions are saved locally and ready to travel.</p><button className="primary-button" onClick={onDone}>Take my Passport shopping <Icon name="arrow" /></button></div>}
-      </section>
+          <p className="microcopy">{reactionNote || "Stored locally. This real product will not appear again."}</p>
+          {index >= 8 && <button className="primary-button taste-finish" onClick={onDone}>Finish my Passport <Icon name="arrow"/></button>}
+        </> : <div className="taste-complete"><div className="approval-icon"><Icon name="check" /></div><h2>Your Passport is ready</h2><p>Your suitability foundation and preference patterns are saved locally and ready to travel.</p><button className="primary-button" onClick={onDone}>Take my Passport shopping <Icon name="arrow" /></button></div>}
+      </section></>}
     </main>
   );
 }
@@ -183,6 +223,7 @@ export default function Home() {
   const [view, setView] = useState<View>("taste");
   const [retailerId, setRetailerId] = useState("all");
   const [connected, setConnected] = useState(false);
+  const [profile, setProfile] = useState<FashionProfile>(demoProfile);
   const [showApproval, setShowApproval] = useState(false);
   const [learnedAvoid, setLearnedAvoid] = useState<string[]>([]);
   const [reactions, setReactions] = useState<Record<string, Reaction>>({});
@@ -195,11 +236,11 @@ export default function Home() {
   const [catalogueError, setCatalogueError] = useState("");
   const [liveAt, setLiveAt] = useState("");
   const [searchStats, setSearchStats] = useState({ storesQueried: 0, storesResponding: 0, candidatesConsidered: 0 });
-  const stateRef = useRef({ retailerId, connected, learnedAvoid, liveProducts });
+  const stateRef = useRef({ retailerId, connected, learnedAvoid, liveProducts, profile });
 
   useEffect(() => {
-    stateRef.current = { retailerId, connected, learnedAvoid, liveProducts };
-  }, [retailerId, connected, learnedAvoid, liveProducts]);
+    stateRef.current = { retailerId, connected, learnedAvoid, liveProducts, profile };
+  }, [retailerId, connected, learnedAvoid, liveProducts, profile]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -207,13 +248,15 @@ export default function Home() {
         setConnected(localStorage.getItem(STORE_CONNECTED) === "true");
         setView(localStorage.getItem(STORE_ONBOARDED) === "true" ? "travel" : "taste");
         setLearnedAvoid(JSON.parse(localStorage.getItem(STORE_SIGNALS) || "[]"));
+        const savedProfile = localStorage.getItem(STORE_PROFILE);
+        if (savedProfile) setProfile(JSON.parse(savedProfile));
       } catch { /* A fresh local profile is safe fallback. */ }
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
 
   const retailer = retailers.find((item) => item.id === retailerId);
-  const ranked = useMemo(() => rankProducts(retailerId === "all" ? liveProducts : liveProducts.filter((product) => product.retailerId === retailerId), demoProfile, learnedAvoid), [liveProducts, retailerId, learnedAvoid]);
+  const ranked = useMemo(() => rankProducts(retailerId === "all" ? liveProducts : liveProducts.filter((product) => product.retailerId === retailerId), profile, learnedAvoid), [liveProducts, retailerId, learnedAvoid, profile]);
   const visible = (passportOn && connected ? ranked.filter((item) => showBlocked || !item.blocked) : ranked.map((item) => ({ ...item, score: 0 }))).slice(0, 30);
   const hiddenCount = passportOn && connected ? ranked.filter((item) => item.blocked).length : 0;
 
@@ -223,7 +266,7 @@ export default function Home() {
       const response = await fetch("/api/shopify/search-all", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: requestText, sharePassport: true }),
+        body: JSON.stringify({ query: requestText, sharePassport: true, profile }),
       });
       const payload = await response.json() as { error?: string; products?: Product[]; liveAt?: string; storesQueried?: number; storesResponding?: number; candidatesConsidered?: number };
       if (!response.ok) throw new Error(payload.error || "The Shopify network did not respond");
@@ -248,7 +291,7 @@ export default function Home() {
           description: "Returns the shopper's stable fashion profile, including size, budget, colour season, body shape, loved and avoided garment attributes. Use before fashion search or ranking.",
           inputSchema: { type: "object", properties: {}, additionalProperties: false },
           annotations: { readOnlyHint: true },
-          execute: async () => ({ ...demoProfile, privacy: { photosRetained: false, browsingSignals: "local-only", connection: "one-time global user approval" } }),
+          execute: async () => ({ ...stateRef.current.profile, profileLayers: { guidance: "body proportions + colour analysis", preference: "explicit taste; overrides guidance" }, privacy: { photosRetained: false, browsingSignals: "local-only", connection: "one-time global user approval" } }),
         },
         {
           name: "find_personal_matches", title: "Find Personal Matches",
@@ -257,12 +300,12 @@ export default function Home() {
           annotations: { readOnlyHint: true, untrustedContentHint: true },
           execute: async (input: Record<string, unknown>) => {
             if (!stateRef.current.connected) return { status: "approval_required", instruction: "Ask the shopper to connect Fashion Passport once in the visible interface." };
-            const response = await fetch("/api/shopify/search-all", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: input.request, sharePassport: true }) });
+            const response = await fetch("/api/shopify/search-all", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: input.request, sharePassport: true, profile: stateRef.current.profile }) });
             const payload = await response.json() as { error?: string; products?: Product[]; liveAt?: string; storesQueried?: number; storesResponding?: number };
             if (!response.ok) return { status: "network_unavailable", error: payload.error };
             const nextProducts = payload.products || [];
             setRetailerId("all"); setLiveProducts(nextProducts); setLiveAt(payload.liveAt || new Date().toISOString()); setCatalogueState("connected");
-            return { status: "connected", protocol: "Shopify UCP/MCP", storesQueried: payload.storesQueried, storesResponding: payload.storesResponding, request: input.request, matches: rankProducts(nextProducts, demoProfile, stateRef.current.learnedAvoid).slice(0, 10).map(({ id, retailerId, name, brand, price, score, productUrl, reasons }) => ({ id, retailer: retailers.find((item) => item.id === retailerId)?.name, name, brand, price, score, productUrl, reasons: reasons.slice(0, 4).map(r => r.label) })) };
+            return { status: "connected", protocol: "Shopify UCP/MCP", storesQueried: payload.storesQueried, storesResponding: payload.storesResponding, request: input.request, matches: rankProducts(nextProducts, stateRef.current.profile, stateRef.current.learnedAvoid).slice(0, 10).map(({ id, retailerId, name, brand, price, score, productUrl, reasons }) => ({ id, retailer: retailers.find((item) => item.id === retailerId)?.name, name, brand, price, score, productUrl, reasons: reasons.slice(0, 4).map(r => r.label) })) };
           },
         },
         {
@@ -276,14 +319,14 @@ export default function Home() {
             if (!destinations.length) return { status: "approval_required", instruction: "Ask the shopper to connect Fashion Passport once in the visible interface." };
             const responses = await Promise.all(destinations.map(async (destination) => {
               try {
-                const response = await fetch("/api/shopify/search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ retailerId: destination.id, query: request, sharePassport: true }) });
+                const response = await fetch("/api/shopify/search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ retailerId: destination.id, query: request, sharePassport: true, profile: stateRef.current.profile }) });
                 const payload = await response.json() as { error?: string; products?: Product[]; liveAt?: string };
                 return response.ok ? { destination, products: payload.products || [], liveAt: payload.liveAt } : { destination, products: [] as Product[], error: payload.error };
               } catch (error) {
                 return { destination, products: [] as Product[], error: error instanceof Error ? error.message : "Retailer unavailable" };
               }
             }));
-            const matches = rankProducts(responses.flatMap((result) => result.products), demoProfile, stateRef.current.learnedAvoid).slice(0, 10);
+            const matches = rankProducts(responses.flatMap((result) => result.products), stateRef.current.profile, stateRef.current.learnedAvoid).slice(0, 10);
             return {
               status: matches.length ? "connected" : "no_results",
               protocol: "Shopify UCP/MCP",
@@ -345,10 +388,10 @@ export default function Home() {
 
   return (
     <div className="app-shell">
-      <header className="topbar"><button className="brand" onClick={() => setView("travel")}><span><Icon name="passport" /></span><strong>Fashion<br/>Passport</strong></button><nav>{(["travel", "shop", "passport", "taste", "privacy"] as View[]).map((item) => <button key={item} className={view === item ? "active" : ""} onClick={() => setView(item)}>{item === "shop" ? "Compare stores" : item === "taste" ? "Teach my taste" : item[0].toUpperCase() + item.slice(1)}</button>)}</nav><div className="webmcp-pill"><i></i><span>WebMCP ready</span></div></header>
+      <header className="topbar"><button className="brand" onClick={() => setView("travel")}><span><Icon name="passport" /></span><strong>Fashion<br/>Passport</strong></button><nav>{(["travel", "shop", "passport", "taste", "privacy"] as View[]).map((item) => <button key={item} className={view === item ? "active" : ""} onClick={() => setView(item)}>{item === "shop" ? "Compare stores" : item === "taste" ? "Build my Passport" : item[0].toUpperCase() + item.slice(1)}</button>)}</nav><div className="webmcp-pill"><i></i><span>WebMCP ready</span></div></header>
       {view === "travel" && <TravelView connected={connected} onConnect={() => setShowApproval(true)} onCompare={() => setView("shop")}/>}
-      {view === "passport" && <PassportView />}
-      {view === "taste" && <TasteView onDone={finishOnboarding} />}
+      {view === "passport" && <PassportView profile={profile} onRebuild={() => setView("taste")} />}
+      {view === "taste" && <TasteView profile={profile} onProfile={setProfile} onDone={finishOnboarding} />}
       {view === "privacy" && <PrivacyView connected={connected} onRevoke={revoke} />}
       {view === "shop" && <main className="shop-page">
         <section className="hero-copy"><p className="eyebrow"><Icon name="sparkle" /> One Passport across Shopify fashion</p><h1>Stop starting from scratch.</h1><p>One standard adapter carries your size, taste and suitability context into any compatible Shopify fashion store.</p>
@@ -370,7 +413,9 @@ export default function Home() {
         </section>
       </main>}
       <footer><span>Fashion Passport</span><p>Your taste travels. Your data doesn’t.</p><div>Built for the WebMCP Challenge · 2026</div></footer>
-      {showApproval && <ApprovalModal onApprove={connectPassport} onClose={() => setShowApproval(false)}/>}
+      {showApproval && (
+        <ApprovalModal profile={profile} onApprove={connectPassport} onClose={() => setShowApproval(false)}/>
+      )}
       {notice && <div className="toast"><Icon name="check"/>{notice}</div>}
     </div>
   );

@@ -21,7 +21,7 @@ Fashion Passport makes that context portable.
 
 The repository contains two complementary surfaces:
 
-1. **Next.js Passport office** — real-product taste onboarding, the Travel launcher and a secondary live multi-store comparison. Onboarding anonymously retrieves distinct garments from retailer catalogues; no cartoon garments or profile sharing are involved.
+1. **Next.js Passport office** — a sub-two-minute Womenswear onboarding, the Travel launcher and a secondary live multi-store comparison. Onboarding first derives a transparent body-proportion and colouring foundation, then anonymously retrieves distinct garments across the full verified retailer panel for preference learning. Menswear is explicitly marked coming soon; no cartoon garments or profile sharing are involved.
 2. **Chrome extension** — the primary portability proof. It discovers the current store's official Shopify UCP endpoint at runtime, stays invisible on unsupported sites and opens an on-store panel of real ranked products. The one-time site approval synchronises into extension storage, so the Passport follows the user to the next compatible store without another prompt.
 
 The web demonstrator currently searches an 18-store directly verified **test panel** with one adapter. A test skirt query on 1 September 2026 considered 334 category-correct products from 16 responding stores, with zero dresses or tops admitted. This panel proves breadth but does not define reach: Travel mode accepts any store the user chooses and the extension discovers its compatibility at runtime. Searching every Shopify store at once would require a merchant directory and a global index; Shopify exposes per-store endpoints, not a public global catalogue endpoint. No paid API, product feed, licensed styling database or retained photo is required.
@@ -93,11 +93,11 @@ Retailer themes and markup can change without requiring selector maintenance bec
 
 ## Ranking logic
 
-The transparent rules engine lives in [`src/lib/scoring.ts`](src/lib/scoring.ts). It combines:
+The transparent rules engine lives in [`src/lib/scoring.ts`](src/lib/scoring.ts), with the four-season and five-body-shape guidance map in [`src/lib/style-theory.ts`](src/lib/style-theory.ts). It combines:
 
 1. hard constraints, including size, budget and avoided materials;
 2. explicit likes and dislikes;
-3. learned local feedback;
+3. learned local feedback, promoted only after repeated evidence rather than one overconfident thumbs-down;
 4. lower-weight colour-season and body-shape guidance.
 
 This ordering is intentional. The demo profile is Deep Winter but loves burnt orange, terracotta and camel, so those colours remain prioritised. It dislikes grey, so grey is penalised even though some greys may suit Winter palettes.

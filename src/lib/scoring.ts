@@ -1,10 +1,8 @@
 import type { FashionProfile, Product, ScoredProduct, ScoreReason } from "./types";
+import { theoryFor } from "./style-theory";
 
 const normalise = (value: string) => value.trim().toLowerCase();
 const includes = (values: string[], value: string) => values.map(normalise).includes(normalise(value));
-
-const winterColours = ["red", "dark pink", "jewel tones"];
-const invertedTriangleShapes = ["a-line", "fit and flare", "flowy"];
 
 export function scoreProduct(product: Product, profile: FashionProfile, learnedAvoid: string[] = []): ScoredProduct {
   let score = 42;
@@ -28,10 +26,12 @@ export function scoreProduct(product: Product, profile: FashionProfile, learnedA
   if (product.sleeve !== "Not stated" && includes(profile.sleeves.avoid, product.sleeve)) hardBlocks.push(`${product.sleeve} sleeves are on your avoid list`);
   if (product.pattern !== "Not stated" && includes(profile.patterns.avoid, product.pattern)) hardBlocks.push(`${product.pattern} is on your avoid list`);
 
-  // Deliberately score a person's stated taste above styling theory.
-  if (includes(profile.colours.love, product.colour)) positive(`${product.colour} is a colour you love`, 14);
+  const theory = theoryFor(profile.colourSeason, profile.bodyShape);
+
+  // Explicit taste is deliberately stronger than the guidance layer.
+  if (includes(profile.colours.love, product.colour)) positive(`${product.colour} is a colour you love`, 16);
   else if (includes(profile.colours.avoid, product.colour)) warning(`${product.colour} is on your avoid list`, 16);
-  else if (winterColours.includes(normalise(product.colour))) positive(`Works with ${profile.colourSeason}`, 7, "theory");
+  if (!includes(profile.colours.avoid, product.colour) && includes(theory.colours, product.colour)) positive(`Likely to suit ${profile.colourSeason} colouring`, 6, "theory");
 
   if (includes(profile.silhouettes.love, product.silhouette)) positive(`${product.silhouette} silhouette`, 10);
   else if (includes(profile.silhouettes.avoid, product.silhouette)) warning(`${product.silhouette} is not your style`, 12);
@@ -48,9 +48,8 @@ export function scoreProduct(product: Product, profile: FashionProfile, learnedA
   if (includes(profile.materials.love, product.material)) positive(`${product.material}`, 7);
   if (includes(profile.lengths.love, product.length)) positive(`${product.length} length`, 6);
 
-  if (profile.bodyShape === "Inverted triangle" && invertedTriangleShapes.includes(normalise(product.silhouette))) {
-    positive(`Balances an ${profile.bodyShape.toLowerCase()} shape`, 4, "theory");
-  }
+  if (includes(theory.silhouettes, product.silhouette)) positive(`Likely to work with your ${profile.bodyShape.toLowerCase()} shape`, 7, "theory");
+  if (includes(theory.necklines, product.neckline)) positive(`${product.neckline} is suggested for your proportions`, 4, "theory");
 
   const learnedLikes = learnedAvoid.filter((trait) => trait.startsWith("love:")).map((trait) => trait.slice(5));
   const learnedDislikes = learnedAvoid.filter((trait) => trait.startsWith("avoid:")).map((trait) => trait.slice(6)).concat(learnedAvoid.filter((trait) => !trait.includes(":")));
