@@ -21,21 +21,22 @@ Fashion Passport makes that context portable.
 
 The repository contains two complementary surfaces:
 
-1. **Next.js demonstrator** — the complete product story, including the Passport, retailer consent, ranking explanations, frictionless taste learning, privacy controls and verified real-product snapshots from ASOS, Jigsaw and Jovonna London.
-2. **Chrome extension** — the portability proof. It runs on the six real retailer domains, asks for one-time permission, annotates and reranks product tiles, and exposes Passport actions to browser agents through WebMCP.
+1. **Next.js demonstrator** — the Passport office and live multi-store search. One server route speaks Shopify UCP, normalises current retailer-owned products, and applies the transparent personal ranking engine after one-time consent.
+2. **Chrome extension** — the portability proof. It discovers the current store's official Shopify UCP endpoint at runtime, stays invisible on unsupported sites, asks for one-time permission, and opens an on-store panel of real ranked products. It also exposes Passport actions to browser agents through WebMCP.
 
-No paid API, product feed, licensed styling database or retained photo is required.
+The four showcase stores are Jigsaw, Lucy & Yak, Oh Polly and Never Fully Dressed. They are examples, not four separate integrations: the extension uses the same runtime discovery and UCP calls on any compatible HTTPS Shopify storefront. No paid API, product feed, licensed styling database or retained photo is required.
 
 ### WebMCP tools
 
 The web demonstrator registers:
 
 - `get_fashion_passport`
-- `find_personal_matches`
+- `find_personal_matches` (live Shopify UCP search and local ranking)
+- `compare_approved_shopify_stores` (one request, one adapter, all approved stores)
 - `request_retailer_access`
 - `record_style_signal`
 
-On supported retailer pages, the extension registers:
+On compatible Shopify retailer pages, the extension registers:
 
 - `get_fashion_passport`
 - `apply_fashion_passport`
@@ -69,21 +70,21 @@ node --check extension/page-tools.js
 2. Enable **Developer mode**.
 3. Select **Load unpacked**.
 4. Choose this repository’s `extension` directory.
-5. Open one of the supported dress category pages.
-6. Select the Fashion Passport control at the bottom-right, review the Passport, and approve the retailer.
+5. Open a compatible Shopify fashion storefront.
+6. Fashion Passport anonymously checks for the standard UCP tools. It renders nothing if the endpoint is absent.
+7. Select the Fashion Passport control, review exactly what will be shared, and approve the retailer.
+8. The extension calls the retailer-owned live catalogue and opens an on-site ranked results panel.
 
-Supported retailer domains:
+Live verified examples as of 1 September 2026:
 
-- ASOS
-- Next
 - Jigsaw
-- Jovonna London
-- Vinted UK
-- John Lewis
+- Lucy & Yak
+- Oh Polly
+- Never Fully Dressed
 
-The standalone app never invents inventory under a retailer’s name. ASOS, Jigsaw and Jovonna cards use real public retailer metadata, retailer-hosted images and links to the real items, retrieved on 1 September 2026. Next, Vinted and John Lewis are demonstrated directly on their real pages through the extension because they do not expose a suitable stable public feed.
+The standalone app and extension never invent inventory under a retailer’s name. Both call `https://{retailer-domain}/api/ucp/mcp`, use Shopify's current `search_catalog` contract, and display retailer-hosted images and links. The extension requests broad HTTPS host access because compatibility is discovered at runtime; before approval it sends only an anonymous `tools/list` capability check to the origin currently being visited. The full Passport is transmitted only after visible per-retailer approval.
 
-Retailer markup changes over time. Each domain has a small selector adapter in [`extension/content.js`](extension/content.js), followed by conservative fallbacks. The extension never sends page behaviour to a server.
+Retailer themes and markup can change without requiring selector maintenance because the extension consumes the shared protocol rather than scraping product cards.
 
 ## Privacy model
 
@@ -112,7 +113,7 @@ This ordering is intentional. The demo profile is Deep Winter but loves burnt or
 - Chrome Manifest V3 extension using isolated and MAIN execution worlds
 - Imperative WebMCP API (`document.modelContext.registerTool`)
 - Local-first browser storage
-- Vercel-ready static deployment
+- Vercel-hosted Next.js deployment with a stateless Shopify UCP route
 
 Supabase is not required for the prize demonstrator. It can later provide opt-in account and cross-device profile sync without changing the local-first default.
 
@@ -128,7 +129,7 @@ The current demonstrator keeps its compact vocabulary in the repository so it re
 
 ## Status
 
-This is a demonstrator-class submission for the 2026 WebMCP Challenge. Retailer product cards are dated public snapshots and link back to their source items. Abstract SVG garments appear only in the clearly labelled preference-learning exercise. The extension is the live real-site interoperability layer.
+This is a demonstrator-class submission for the 2026 WebMCP Challenge. Retailer product cards are retrieved live through retailer-owned Shopify UCP endpoints; there is no static product fallback. Abstract SVG garments appear only in the clearly labelled preference-learning exercise. The extension proves the same Passport can travel to compatible real storefronts without retailer-specific DOM adapters.
 
 ## License
 

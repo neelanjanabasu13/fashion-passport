@@ -22,7 +22,8 @@ export type Retailer = {
   id: string;
   name: string;
   url: string;
-  kind: "retailer" | "shopify" | "secondhand";
+  kind: "shopify";
+  endpoint: string;
 };
 
 export type Product = {
@@ -43,7 +44,7 @@ export type Product = {
   accent?: string;
   imageUrl?: string;
   productUrl?: string;
-  source?: "live-snapshot" | "preference-sketch";
+  source?: "live-ucp" | "preference-sketch";
 };
 
 export type ScoreReason = {
