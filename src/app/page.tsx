@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import Image from "next/image";
 import { DressArt } from "@/components/dress-art";
 import { Icon } from "@/components/icons";
-import { demoProfile, retailers, tasteProducts } from "@/lib/data";
+import { demoProfile, retailers } from "@/lib/data";
 import { rankProducts } from "@/lib/scoring";
 import type { Product, Retailer, ScoredProduct } from "@/lib/types";
 
@@ -12,7 +12,7 @@ const STORE_CONNECTED = "fashion-passport:connected";
 const STORE_ONBOARDED = "fashion-passport:onboarded";
 const STORE_SIGNALS = "fashion-passport:learned-avoid";
 
-type View = "shop" | "passport" | "taste" | "privacy";
+type View = "travel" | "shop" | "passport" | "taste" | "privacy";
 type Reaction = "up" | "down";
 
 function retailerKind(retailer: Retailer) {
@@ -94,36 +94,70 @@ function PassportView() {
   );
 }
 
+function TravelView({ connected, onConnect, onCompare }: { connected: boolean; onConnect: () => void; onCompare: () => void }) {
+  const [storeUrl, setStoreUrl] = useState("");
+  const openStore = (event: FormEvent) => {
+    event.preventDefault();
+    try {
+      const url = new URL(/^https?:\/\//i.test(storeUrl) ? storeUrl : `https://${storeUrl}`);
+      if (url.protocol === "https:") window.open(url.href, "_blank", "noopener,noreferrer");
+    } catch { /* Keep the user on the safe launcher. */ }
+  };
+  return (
+    <main className="travel-page">
+      <section className="travel-hero"><p className="eyebrow"><Icon name="sparkle"/> The actual Passport experience</p><h1>Take it with you.</h1><p>Open a compatible Shopify store. Fashion Passport discovers its official endpoint and applies the same size, taste and suitability profile on the retailer’s own website.</p>
+        <div className={`travel-status ${connected ? "ready" : ""}`}><Icon name={connected ? "check" : "lock"}/><span><strong>{connected ? "Passport connected once" : "Connect once before travelling"}</strong>{connected ? "No new prompt when you change retailer, category, query or tab." : "One clear approval replaces repetitive retailer-by-retailer consent."}</span>{!connected && <button onClick={onConnect}>Connect once</button>}</div>
+      </section>
+      <section className="travel-demo">
+        <div className="travel-demo-copy"><p className="eyebrow">The wow moment</p><h2>Jigsaw → Lucy & Yak.<br/>Same Passport.</h2><ol><li>Reload the unpacked extension once.</li><li>Open Jigsaw and use Fashion Passport on the live site.</li><li>Open Lucy & Yak. Your Passport is already there—no second approval.</li></ol><button className="text-button" onClick={onCompare}>Or compare all verified test stores →</button></div>
+        <div className="travel-pair">{retailers.slice(0, 2).map((store, index) => <a key={store.id} href={store.url} target="_blank" rel="noreferrer"><span>{index + 1}</span><div><small>Open real retailer</small><strong>{store.name}</strong><em>{index === 0 ? "Passport appears" : "Already connected"}</em></div><Icon name="external"/></a>)}</div>
+      </section>
+      <section className="any-store"><div><p className="eyebrow">Not limited to a shortlist</p><h2>Try another Shopify fashion store</h2><p>The extension checks the store you choose at runtime. If it exposes the compatible catalogue tool, the Passport appears; if not, it stays out of the way.</p></div><form onSubmit={openStore}><input value={storeUrl} onChange={(event) => setStoreUrl(event.target.value)} placeholder="shop.example.com" aria-label="Shopify store URL"/><button>Travel there <Icon name="arrow"/></button></form></section>
+      <section className="verified-destinations"><div><p className="eyebrow">Live test panel</p><h2>{retailers.length} destinations we directly checked</h2><span>These prove the adapter; they do not define its reach.</span></div><div>{retailers.map((store) => <a key={store.id} href={store.url} target="_blank" rel="noreferrer"><strong>{store.name}</strong><small>Official UCP endpoint verified</small><Icon name="external"/></a>)}</div></section>
+    </main>
+  );
+}
+
 function TasteView({ onDone }: { onDone: () => void }) {
-  const choices = tasteProducts;
+  const [choices, setChoices] = useState<Product[]>([]);
   const [index, setIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
   useEffect(() => {
-    const timer = window.setTimeout(() => {
+    const controller = new AbortController();
+    const load = async () => {
       try {
-        const saved = JSON.parse(localStorage.getItem("fashion-passport:taste-onboarding") || "[]") as { productId: string }[];
-        setIndex(Math.min(saved.length, choices.length));
-      } catch { /* Start at the first distinct preference card. */ }
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [choices.length]);
+        const response = await fetch("/api/shopify/taste", { signal: controller.signal });
+        const payload = await response.json() as { products?: Product[] };
+        const seen = new Set((JSON.parse(localStorage.getItem("fashion-passport:taste-onboarding") || "[]") as { productId: string }[]).map((item) => item.productId));
+        setChoices((payload.products || []).filter((product) => !seen.has(product.id)).slice(0, 12));
+      } catch { if (!controller.signal.aborted) setChoices([]); }
+      finally { if (!controller.signal.aborted) setLoading(false); }
+    };
+    void load();
+    return () => controller.abort();
+  }, []);
   const current = choices[index];
   const react = (reaction: Reaction) => {
     if (!current) return;
     const saved = JSON.parse(localStorage.getItem("fashion-passport:taste-onboarding") || "[]") as { productId: string; reaction: Reaction }[];
     localStorage.setItem("fashion-passport:taste-onboarding", JSON.stringify([...saved.filter((item) => item.productId !== current.id), { productId: current.id, reaction }]));
+    const traits = [current.colour, current.silhouette, current.neckline, current.sleeve, current.pattern, current.material, current.length].filter((trait) => trait !== "Not stated");
+    const signals = JSON.parse(localStorage.getItem(STORE_SIGNALS) || "[]") as string[];
+    localStorage.setItem(STORE_SIGNALS, JSON.stringify(Array.from(new Set([...signals, ...traits.map((trait) => `${reaction === "up" ? "love" : "avoid"}:${trait}`)]))));
     setIndex((n) => n + 1);
   };
   return (
     <main className="taste-page">
-      <div className="page-heading compact"><p className="eyebrow">Abstract preference study</p><h1>Teach it by reacting.</h1><p>These are deliberately neutral garment sketches—not retailer products—so you can react to shape, neckline and pattern without brand or price getting in the way.</p></div>
+      <div className="page-heading compact"><p className="eyebrow">Real-product taste training</p><h1>Teach it by reacting.</h1><p>Real garments from live retailer catalogues. One tap teaches your taste; every product is unique and your profile is not shared during this step.</p></div>
       <section className="taste-stage">
-        <div className="progress-meta"><span>{Math.min(index + 1, choices.length)} of {choices.length}</span><span>No repeats</span></div>
-        <div className="progress-line"><span style={{ width: `${Math.min(100, (index / choices.length) * 100)}%` }} /></div>
-        {current ? <>
-          <div className="taste-card" key={current.id}><DressArt product={current} /><div className="taste-caption"><strong>{current.silhouette}</strong><span>{current.neckline} neck · {current.pattern}</span></div></div>
+        <div className="progress-meta"><span>{loading ? "Loading live products" : `${Math.min(index + 1, choices.length)} of ${choices.length}`}</span><span>Real · no repeats</span></div>
+        <div className="progress-line"><span style={{ width: `${choices.length ? Math.min(100, (index / choices.length) * 100) : 0}%` }} /></div>
+        {loading ? <div className="taste-loading">Reading live retailer catalogues…</div> : current ? <>
+          <div className="taste-card" key={current.id}>{current.imageUrl && <Image className="taste-real-image" src={current.imageUrl} alt={current.name} fill sizes="340px" />}<div className="taste-caption"><strong>{current.brand}</strong><span>{current.name}</span></div></div>
           <div className="taste-actions"><button onClick={() => react("down")} aria-label="Not for me"><Icon name="thumbsDown" /><span>Not me</span></button><button className="love" onClick={() => react("up")} aria-label="Love it"><Icon name="thumbsUp" /><span>Love it</span></button></div>
-          <p className="microcopy">One tap stores the signal locally. This sketch will not appear again.</p>
-        </> : <div className="taste-complete"><div className="approval-icon"><Icon name="check" /></div><h2>Taste pass complete</h2><p>Twelve distinct reactions have been saved locally and are ready to influence ranking.</p><button className="primary-button" onClick={onDone}>See my matches <Icon name="arrow" /></button></div>}
+          <p className="microcopy">Stored locally. This product will not appear again.</p>
+          {index >= 5 && <button className="text-button taste-finish" onClick={onDone}>That’s enough for now →</button>}
+        </> : <div className="taste-complete"><div className="approval-icon"><Icon name="check" /></div><h2>Taste pass complete</h2><p>Your distinct reactions are saved locally and ready to travel.</p><button className="primary-button" onClick={onDone}>Take my Passport shopping <Icon name="arrow" /></button></div>}
       </section>
     </main>
   );
@@ -171,7 +205,7 @@ export default function Home() {
     const timer = window.setTimeout(() => {
       try {
         setConnected(localStorage.getItem(STORE_CONNECTED) === "true");
-        setView(localStorage.getItem(STORE_ONBOARDED) === "true" ? "shop" : "taste");
+        setView(localStorage.getItem(STORE_ONBOARDED) === "true" ? "travel" : "taste");
         setLearnedAvoid(JSON.parse(localStorage.getItem(STORE_SIGNALS) || "[]"));
       } catch { /* A fresh local profile is safe fallback. */ }
     }, 0);
@@ -295,7 +329,8 @@ export default function Home() {
   const selectRetailer = (id: string) => { setRetailerId(id); setShowBlocked(false); };
   const connectPassport = () => {
     setConnected(true); localStorage.setItem(STORE_CONNECTED, "true");
-    setShowApproval(false); setPassportOn(true); void loadCatalogue(query);
+    document.dispatchEvent(new Event("fashion-passport:connection-changed"));
+    setShowApproval(false); setPassportOn(true); if (view === "shop") void loadCatalogue(query);
   };
   const reactTo = (item: ScoredProduct, reaction: Reaction) => {
     setReactions((current) => ({ ...current, [item.id]: reaction }));
@@ -305,12 +340,13 @@ export default function Home() {
     } else setNotice("Saved — more like this");
     setTimeout(() => setNotice(""), 2200);
   };
-  const revoke = () => { setConnected(false); localStorage.removeItem(STORE_CONNECTED); setLiveProducts([]); setCatalogueState("idle"); };
-  const finishOnboarding = () => { localStorage.setItem(STORE_ONBOARDED, "true"); setView("shop"); };
+  const revoke = () => { setConnected(false); localStorage.removeItem(STORE_CONNECTED); document.dispatchEvent(new Event("fashion-passport:connection-changed")); setLiveProducts([]); setCatalogueState("idle"); };
+  const finishOnboarding = () => { localStorage.setItem(STORE_ONBOARDED, "true"); try { setLearnedAvoid(JSON.parse(localStorage.getItem(STORE_SIGNALS) || "[]")); } catch { /* Keep the stable profile. */ } setView("travel"); };
 
   return (
     <div className="app-shell">
-      <header className="topbar"><button className="brand" onClick={() => setView("shop")}><span><Icon name="passport" /></span><strong>Fashion<br/>Passport</strong></button><nav>{(["shop", "passport", "taste", "privacy"] as View[]).map((item) => <button key={item} className={view === item ? "active" : ""} onClick={() => setView(item)}>{item === "taste" ? "Teach my taste" : item[0].toUpperCase() + item.slice(1)}</button>)}</nav><div className="webmcp-pill"><i></i><span>WebMCP ready</span></div></header>
+      <header className="topbar"><button className="brand" onClick={() => setView("travel")}><span><Icon name="passport" /></span><strong>Fashion<br/>Passport</strong></button><nav>{(["travel", "shop", "passport", "taste", "privacy"] as View[]).map((item) => <button key={item} className={view === item ? "active" : ""} onClick={() => setView(item)}>{item === "shop" ? "Compare stores" : item === "taste" ? "Teach my taste" : item[0].toUpperCase() + item.slice(1)}</button>)}</nav><div className="webmcp-pill"><i></i><span>WebMCP ready</span></div></header>
+      {view === "travel" && <TravelView connected={connected} onConnect={() => setShowApproval(true)} onCompare={() => setView("shop")}/>}
       {view === "passport" && <PassportView />}
       {view === "taste" && <TasteView onDone={finishOnboarding} />}
       {view === "privacy" && <PrivacyView connected={connected} onRevoke={revoke} />}

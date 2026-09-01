@@ -158,7 +158,18 @@
 
   const showToast = (message) => { document.querySelector(".fp-toast")?.remove(); const toast = document.createElement("div"); toast.className = "fp-toast"; toast.textContent = `✓ ${message}`; document.documentElement.appendChild(toast); window.setTimeout(() => toast.remove(), 3200); };
 
+  const syncPassportApp = async () => {
+    const connected = localStorage.getItem("fashion-passport:connected") === "true";
+    approved = connected;
+    await chrome.storage.local.set({ [approvalKey]: connected });
+  };
+
   const init = async () => {
+    if (document.querySelector('meta[name="fashion-passport-app"]')) {
+      await syncPassportApp();
+      document.addEventListener("fashion-passport:connection-changed", syncPassportApp);
+      return;
+    }
     const compatible = await probe();
     if (!compatible) return;
     retailerName = merchantName();
