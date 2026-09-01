@@ -7,7 +7,7 @@ const winterColours = ["red", "dark pink", "jewel tones"];
 const invertedTriangleShapes = ["a-line", "fit and flare", "flowy"];
 
 export function scoreProduct(product: Product, profile: FashionProfile, learnedAvoid: string[] = []): ScoredProduct {
-  let score = 50;
+  let score = 42;
   const reasons: ScoreReason[] = [];
   const positive = (label: string, weight: number, kind: ScoreReason["kind"] = "positive") => {
     score += weight;
@@ -22,6 +22,11 @@ export function scoreProduct(product: Product, profile: FashionProfile, learnedA
   if (product.sizes.length > 0 && !product.sizes.includes(profile.size)) hardBlocks.push(`${profile.size} unavailable`);
   if (product.price > profile.budget) hardBlocks.push(`Over £${profile.budget} budget`);
   if (product.material !== "Not stated" && includes(profile.materials.avoid, product.material)) hardBlocks.push(`${product.material} is on your avoid list`);
+  if (product.colour !== "Not stated" && includes(profile.colours.avoid, product.colour)) hardBlocks.push(`${product.colour} is on your avoid list`);
+  if (product.silhouette !== "Not stated" && includes(profile.silhouettes.avoid, product.silhouette)) hardBlocks.push(`${product.silhouette} is on your avoid list`);
+  if (product.neckline !== "Not stated" && includes(profile.necklines.avoid, product.neckline)) hardBlocks.push(`${product.neckline} neckline is on your avoid list`);
+  if (product.sleeve !== "Not stated" && includes(profile.sleeves.avoid, product.sleeve)) hardBlocks.push(`${product.sleeve} sleeves are on your avoid list`);
+  if (product.pattern !== "Not stated" && includes(profile.patterns.avoid, product.pattern)) hardBlocks.push(`${product.pattern} is on your avoid list`);
 
   // Deliberately score a person's stated taste above styling theory.
   if (includes(profile.colours.love, product.colour)) positive(`${product.colour} is a colour you love`, 14);

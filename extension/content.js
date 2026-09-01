@@ -4,7 +4,7 @@
 
   const endpoint = `${location.origin}/api/ucp/mcp`;
   const host = location.hostname.replace(/^www\./, "");
-  const approvalKey = `retailer:${host}:approved`;
+  const approvalKey = "fashion-passport:connected-once";
   const signalKey = "fashion-passport:learned-signals";
   const agentProfile = "https://shopify.dev/ucp/agent-profiles/examples/2026-08-25/valid-with-capabilities.json";
   const profile = {
@@ -23,13 +23,17 @@
 
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[char]);
   const safeUrl = (value) => { try { const url = new URL(value, location.origin); return url.protocol === "https:" ? url.href : ""; } catch { return ""; } };
+  const hasTerm = (text, term) => new RegExp(`(^|[^a-z0-9])${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9]|$)`, "i").test(text);
   const stripHtml = (value = "") => value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
   const money = (amount) => Number.isFinite(amount) ? Number(amount) / 100 : 0;
   const merchantName = () => document.querySelector('meta[property="og:site_name"]')?.content?.trim() || document.title.split(/[|–—]/)[0].trim() || host;
   const queryFromPage = () => {
     const heading = document.querySelector("h1")?.textContent?.trim();
-    if (heading && heading.length < 70 && /dress|clothing|women|occasion|new|sale/i.test(heading)) return heading;
-    return /dress/i.test(`${location.pathname} ${document.title}`) ? "midi dress" : "women's clothing";
+    if (heading && heading.length < 70 && /dress|skirt|top|trouser|jean|jumpsuit|clothing|women|occasion|new|sale/i.test(heading)) return heading;
+    const page = `${location.pathname} ${document.title}`;
+    if (/skirt/i.test(page)) return "skirts";
+    if (/dress/i.test(page)) return "midi dress";
+    return "women's clothing";
   };
   const fullIntent = () => `Shopper explicitly approved sharing this Fashion Passport: ${profile.size}, ${profile.heightCm} cm; ${profile.season}; ${profile.shape}; loves ${profile.love.join(", ")}; avoids ${profile.avoid.join(", ")}; budget GBP ${profile.budget}`;
 
@@ -60,10 +64,22 @@
     return `${item.title || ""} ${description} ${tags} ${options}`.toLowerCase();
   };
 
+  const matchesCategory = (item, query) => {
+    const request = query.toLowerCase(); const title = String(item.title || "").toLowerCase();
+    const groups = [
+      { q: ["skirt", "skirts"], p: ["skirt", "skort"] }, { q: ["dress", "dresses"], p: ["dress", "gown"] },
+      { q: ["top", "tops"], p: ["top", "blouse", "shirt", "bodysuit", "vest", "camisole"] },
+      { q: ["trouser", "trousers", "pants"], p: ["trouser", "pants"] }, { q: ["jean", "jeans"], p: ["jean", "denim"] }
+    ];
+    const category = groups.find((group) => group.q.some((term) => new RegExp(`\\b${term}\\b`, "i").test(request)));
+    return !category || category.p.some((term) => new RegExp(`\\b${term}s?\\b`, "i").test(title));
+  };
+
   const analyse = (item) => {
     const text = productText(item);
-    const loves = profile.love.filter((term) => text.includes(term));
-    const avoids = [...profile.avoid, ...learnedSignals].filter((term) => text.includes(term));
+    const titleText = String(item.title || "").toLowerCase();
+    const loves = profile.love.filter((term) => hasTerm(titleText, term));
+    const avoids = [...profile.avoid, ...learnedSignals].filter((term) => hasTerm(text, term));
     const price = money(item.price_range?.min?.amount);
     const sizeOptions = (item.variants || []).filter((variant) => variant.availability?.available !== false).flatMap((variant) => (variant.options || []).filter((option) => option.name?.toLowerCase() === "size").map((option) => option.label));
     const hasSizeData = sizeOptions.length > 0;
@@ -92,7 +108,7 @@
   const showApproval = () => {
     document.getElementById("fashion-passport-consent")?.remove();
     const modal = document.createElement("div"); modal.id = "fashion-passport-consent";
-    modal.innerHTML = `<div class="fp-consent-card"><button class="fp-close" aria-label="Close">×</button><div class="fp-passport">▣</div><p class="fp-kicker">Official Shopify connection detected</p><h2>Let your Passport enter ${escapeHtml(retailerName)}?</h2><p>This one-time approval shares your full fashion profile through ${escapeHtml(retailerName)}’s native Shopify endpoint. Browsing history stays in this browser.</p><dl><div><dt>Size & fit</dt><dd>UK 10 · 163 cm</dd></div><div><dt>Style context</dt><dd>Deep Winter · Inverted triangle</dd></div><div><dt>Taste & limits</dt><dd>Colours, cuts, fabric · £100 max</dd></div></dl><button class="fp-allow">Allow on ${escapeHtml(retailerName)} →</button><button class="fp-not-now">Not now</button><small>${escapeHtml(endpoint)}</small></div>`;
+    modal.innerHTML = `<div class="fp-consent-card"><button class="fp-close" aria-label="Close">×</button><div class="fp-passport">▣</div><p class="fp-kicker">Official Shopify connection detected</p><h2>Connect Fashion Passport once?</h2><p>This single approval applies your Passport on compatible Shopify stores, including ${escapeHtml(retailerName)}, without asking again for every shop or category. Browsing history stays in this browser.</p><dl><div><dt>Size & fit</dt><dd>UK 10 · 163 cm</dd></div><div><dt>Style context</dt><dd>Deep Winter · Inverted triangle</dd></div><div><dt>Taste & limits</dt><dd>Colours, cuts, fabric · £100 max</dd></div></dl><button class="fp-allow">Connect once →</button><button class="fp-not-now">Not now</button><small>${escapeHtml(endpoint)}</small></div>`;
     document.documentElement.appendChild(modal);
     modal.querySelector(".fp-close").addEventListener("click", () => modal.remove());
     modal.querySelector(".fp-not-now").addEventListener("click", () => modal.remove());
@@ -127,10 +143,10 @@
     if (!approved) return showApproval();
     renderPill("Calling native endpoint…");
     try {
-      const result = await rpc("tools/call", { name: "search_catalog", arguments: { meta: { "ucp-agent": { profile: agentProfile } }, catalog: { query, context: { address_country: "GB", language: "en-GB", currency: "GBP", intent: fullIntent() }, pagination: { limit: 18 } } } });
+      const result = await rpc("tools/call", { name: "search_catalog", arguments: { meta: { "ucp-agent": { profile: agentProfile } }, catalog: { query, context: { address_country: "GB", language: "en-GB", currency: "GBP", intent: fullIntent() }, pagination: { limit: 30 } } } });
       const text = result?.content?.find((entry) => entry.type === "text")?.text;
       const payload = JSON.parse(text || "{}");
-      products = payload.products || [];
+      products = (payload.products || []).filter((item) => matchesCategory(item, query));
       const ranked = products.map(analyse).sort((a, b) => b.score - a.score);
       renderPanel(query, ranked); personalized = true;
       document.documentElement.dataset.fashionPassportSummary = JSON.stringify({ protocol: "Shopify UCP/MCP", endpoint, scanned: ranked.length, recommended: ranked.filter((item) => item.score >= 82 && !item.blocked).length, hidden: ranked.filter((item) => item.blocked).length, query });
