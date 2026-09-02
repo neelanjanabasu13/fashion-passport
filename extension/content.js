@@ -137,14 +137,15 @@
     });
   };
 
-  const renderPanel = (query, ranked) => {
+  const renderPanel = (query, ranked, scan) => {
     panel?.remove(); panel = document.createElement("aside"); panel.id = "fashion-passport-results";
     const visible = ranked.filter((result) => !result.blocked).slice(0, 8);
     const cards = visible.map((result) => {
       const url = safeUrl(result.item.url); const image = safeUrl(result.image);
       return `<article class="fp-result-card"><a href="${escapeHtml(url)}" target="_blank" rel="noreferrer">${image ? `<img src="${escapeHtml(image)}" alt="">` : ""}<span class="fp-score">${result.score}%</span><div><small>${escapeHtml(retailerName)}</small><h3>${escapeHtml(result.item.title)}</h3><strong>£${result.price.toFixed(2)}</strong><ul>${result.reasons.slice(0, 3).map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul></div></a><div class="fp-feedback"><button data-signal="down" data-trait="${escapeHtml(result.text.includes("cowl") ? "cowl" : result.text.includes("polyester") ? "polyester" : "style")}" aria-label="Show less like this">↓</button><button data-signal="up" aria-label="Show more like this">↑</button></div></article>`;
     }).join("");
-    panel.innerHTML = `<header><div><p>Fashion Passport</p><h2>${escapeHtml(retailerName)}</h2><span><i></i> Live Shopify UCP</span></div><button class="fp-panel-close" aria-label="Close">×</button></header><form><input value="${escapeHtml(query)}" aria-label="Search this retailer"><button>Rank</button></form><div class="fp-result-summary"><strong>${visible.length}</strong> best matches from ${ranked.length} live products · ${ranked.filter((result) => result.blocked).length} held back</div><div class="fp-results-grid">${cards || `<p class="fp-empty">No suitable live matches returned. Try a broader search.</p>`}</div><footer>One Passport adapter · retailer-owned products · personal ranking</footer>`;
+    const scannedLabel = scan.complete ? String(scan.scanned) : `at least ${scan.scanned}`;
+    panel.innerHTML = `<header><div><p>Fashion Passport</p><h2>${escapeHtml(retailerName)}</h2><span><i></i> Live Shopify UCP</span></div><button class="fp-panel-close" aria-label="Close">×</button></header><form><input value="${escapeHtml(query)}" aria-label="Search this retailer"><button>Rank</button></form><div class="fp-result-summary"><strong>${visible.length}</strong> shown from ${ranked.length} relevant products · ${scannedLabel} live catalogue products scanned · ${ranked.filter((result) => result.blocked).length} held back</div><div class="fp-results-grid">${cards || `<p class="fp-empty">No suitable live matches returned. Try a broader search.</p>`}</div><footer>${scan.pages} catalogue ${scan.pages === 1 ? "page" : "pages"} read · retailer-owned products · personal ranking</footer>`;
     document.documentElement.appendChild(panel);
     panel.querySelector(".fp-panel-close").addEventListener("click", togglePanel);
     panel.querySelector("form").addEventListener("submit", (event) => { event.preventDefault(); const value = panel.querySelector("input").value.trim(); if (value) searchCatalogue(value); });
@@ -159,18 +160,38 @@
     const hidden = panel.classList.toggle("fp-panel-hidden"); personalized = !hidden; renderPill();
   };
 
+  const readCatalogPage = async (query, cursor) => {
+    const result = await rpc("tools/call", { name: "search_catalog", arguments: { meta: { "ucp-agent": { profile: agentProfile } }, catalog: { query, context: { address_country: "GB", language: "en-GB", currency: "GBP", intent: fullIntent() }, pagination: { limit: 250, ...(cursor ? { cursor } : {}) } } } });
+    const text = result?.content?.find((entry) => entry.type === "text")?.text;
+    return JSON.parse(text || "{}");
+  };
+
+  const readFullCatalog = async (query) => {
+    const found = new Map();
+    let cursor = ""; let hasNext = true; let pages = 0;
+    const maxPages = 12;
+    while (hasNext && pages < maxPages) {
+      renderPill(pages ? `Scanning ${found.size}+ live products…` : "Opening full live catalogue…");
+      const payload = await readCatalogPage(query, cursor);
+      const pageProducts = Array.isArray(payload.products) ? payload.products : [];
+      pageProducts.forEach((item) => found.set(item.id || item.url || `${pages}:${item.title}`, item));
+      pages += 1;
+      hasNext = Boolean(payload.pagination?.has_next_page && payload.pagination?.cursor && pageProducts.length);
+      cursor = hasNext ? payload.pagination.cursor : "";
+    }
+    return { products: [...found.values()], scanned: found.size, pages, complete: !hasNext };
+  };
+
   const searchCatalogue = async (query) => {
     if (!approved) return showApproval();
     renderPill("Calling native endpoint…");
     try {
-      const result = await rpc("tools/call", { name: "search_catalog", arguments: { meta: { "ucp-agent": { profile: agentProfile } }, catalog: { query, context: { address_country: "GB", language: "en-GB", currency: "GBP", intent: fullIntent() }, pagination: { limit: 30 } } } });
-      const text = result?.content?.find((entry) => entry.type === "text")?.text;
-      const payload = JSON.parse(text || "{}");
-      products = (payload.products || []).filter((item) => matchesCategory(item, query));
+      const scan = await readFullCatalog(query);
+      products = scan.products.filter((item) => matchesCategory(item, query));
       const ranked = products.map(analyse).sort((a, b) => b.score - a.score);
-      renderPanel(query, ranked); personalized = true;
-      document.documentElement.dataset.fashionPassportSummary = JSON.stringify({ protocol: "Shopify UCP/MCP", endpoint, scanned: ranked.length, recommended: ranked.filter((item) => item.score >= 82 && !item.blocked).length, hidden: ranked.filter((item) => item.blocked).length, query });
-      renderPill(); showToast(`${ranked.length} real products ranked`);
+      renderPanel(query, ranked, scan); personalized = true;
+      document.documentElement.dataset.fashionPassportSummary = JSON.stringify({ protocol: "Shopify UCP/MCP", endpoint, catalogueScanned: scan.scanned, relevantRanked: ranked.length, catalogueCountComplete: scan.complete, pagesRead: scan.pages, recommended: ranked.filter((item) => item.score >= 82 && !item.blocked).length, hidden: ranked.filter((item) => item.blocked).length, query });
+      renderPill(); showToast(`${ranked.length} relevant products ranked from ${scan.complete ? scan.scanned : `${scan.scanned}+`} scanned`);
     } catch (error) {
       renderPill("Connection needs retry"); showToast(`Could not read this catalogue: ${error instanceof Error ? error.message : "unknown error"}`);
     }

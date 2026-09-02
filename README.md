@@ -74,7 +74,7 @@ node --check extension/popup.js
 5. Reload the extension after code updates, then click its toolbar icon to open the Jigsaw → Lucy & Yak travel demo.
 6. Fashion Passport anonymously checks for the standard UCP tools. It renders nothing if the endpoint is absent.
 7. Select the Fashion Passport control and review exactly what will be shared. This is the single connection prompt; subsequent compatible stores and category changes do not ask again.
-8. The extension calls the retailer-owned live catalogue and opens an on-site ranked results panel.
+8. The extension follows the retailer's official catalogue cursors in pages of up to 250, deduplicates the response, and opens an on-site ranked results panel. The panel distinguishes the top products shown, category-relevant products ranked and complete live catalogue products scanned; it never presents one API page as the retailer's total.
 
 Live verified examples as of 1 September 2026 include Jigsaw, Lucy & Yak, Oh Polly, Never Fully Dressed, RIXO, KITRI, OMNES, Nobody's Child, House of Sunny, Motel Rocks, MESHKI, Nadine Merabi, Finisterre, Passenger, Beyond Nine, Albaray, Ro&Zo and Disturbia.
 
