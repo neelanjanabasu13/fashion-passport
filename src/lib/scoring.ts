@@ -1,5 +1,5 @@
 import type { FashionProfile, Product, ScoredProduct, ScoreReason } from "./types";
-import { theoryFor } from "./style-theory";
+import { theoryFit, theoryFor } from "./style-theory";
 
 const normalise = (value: string) => value.trim().toLowerCase();
 const includes = (values: string[], value: string) => values.map(normalise).includes(normalise(value));
@@ -50,6 +50,9 @@ export function scoreProduct(product: Product, profile: FashionProfile, learnedA
 
   if (includes(theory.silhouettes, product.silhouette)) positive(`Likely to work with your ${profile.bodyShape.toLowerCase()} shape`, 7, "theory");
   if (includes(theory.necklines, product.neckline)) positive(`${product.neckline} is suggested for your proportions`, 4, "theory");
+  if (includes(theory.sleeves, product.sleeve)) positive(`${product.sleeve} sleeves suit the guidance layer`, 3, "theory");
+  if (includes(theory.lengths, product.length)) positive(`${product.length} length suits the guidance layer`, 3, "theory");
+  if (includes(theory.materials, product.material)) positive(`${product.material} supports the suggested drape or structure`, 3, "theory");
 
   const learnedLikes = learnedAvoid.filter((trait) => trait.startsWith("love:")).map((trait) => trait.slice(5));
   const learnedDislikes = learnedAvoid.filter((trait) => trait.startsWith("avoid:")).map((trait) => trait.slice(6)).concat(learnedAvoid.filter((trait) => !trait.includes(":")));
@@ -73,4 +76,8 @@ export function scoreProduct(product: Product, profile: FashionProfile, learnedA
 
 export function rankProducts(items: Product[], profile: FashionProfile, learnedAvoid: string[] = []) {
   return items.map((item) => scoreProduct(item, profile, learnedAvoid)).sort((a, b) => b.score - a.score);
+}
+
+export function analysisFit(product: Product, profile: FashionProfile) {
+  return theoryFit(product, profile.colourSeason, profile.bodyShape);
 }
