@@ -7,7 +7,10 @@ import { Icon } from "@/components/icons";
 import { BodyShapeVisual, ColourSignalVisual, PaletteVisual } from "@/components/profile-visuals";
 import { demoProfile, retailers } from "@/lib/data";
 import { analysisFit, rankProducts } from "@/lib/scoring";
-import { legacySignalsToPreferences } from "@/lib/learned";
+import { derivePreferences, emptyLearned, legacySignalsToPreferences, recordVote, traitKeysForProduct, undoVote } from "@/lib/learned";
+import { SEASONS, theoryFor as seasonTheory } from "@/lib/style-theory";
+import { FASHION_DIMENSIONS, VOCABULARY, type Dimension } from "@/lib/ontology";
+import type { LearnedTaste, PreferenceGroup, PreferenceLevel } from "@/lib/types";
 import { inferColourSeason, theoryFor } from "@/lib/style-theory";
 import type { FashionProfile, Product, Retailer, ScoredProduct } from "@/lib/types";
 
@@ -73,31 +76,86 @@ function ApprovalModal({ profile, onApprove, onClose }: { profile: FashionProfil
   );
 }
 
-function PassportView({ profile, onRebuild }: { profile: FashionProfile; onRebuild: () => void }) {
-  const theory = theoryFor(profile.colourSeason, profile.bodyShape);
-  const preferenceGroups = [
-    ["Colours I choose", profile.colours.love],
-    ["Cuts I choose", [...profile.silhouettes.love, ...profile.necklines.love, ...profile.lengths.love]],
-    ["Details I choose", [...profile.sleeves.love, ...profile.patterns.love]],
-    ["Fabrics I choose", profile.materials.love],
-  ] as const;
+function PassportView({ profile, learned, onRebuild }: { profile: FashionProfile; learned: LearnedTaste; onRebuild: () => void }) {
+  const theory = seasonTheory(profile.colourSeason, profile.bodyShape);
+  const preferences = derivePreferences(learned);
+  const groups: [string, PreferenceGroup][] = [
+    ["Colours", profile.colours], ["Shapes", profile.silhouettes], ["Necklines", profile.necklines],
+    ["Sleeves", profile.sleeves], ["Lengths", profile.lengths], ["Prints", profile.patterns], ["Fabrics", profile.materials],
+  ];
+  const stated = groups.filter(([, group]) => group.love.length + group.avoid.length + group.never.length > 0);
+  const hardRules = groups.flatMap(([title, group]) => group.never.map((value) => ({ title, value })));
   return (
     <main className="secondary-page">
-      <div className="page-heading"><p className="eyebrow">Womenswear Passport · Menswear coming soon</p><h1>What suits you.<br/>What you choose.</h1><p>Two distinct datasets travel together. Guidance helps when you are unsure; your stated taste wins whenever they disagree.</p></div>
+      <div className="page-heading"><p className="eyebrow">Womenswear Passport · Menswear coming soon</p><h1>What suits you.<br/>What you choose.</h1><p>Three layers travel together, kept separate on purpose.</p></div>
       <div className="passport-layout">
         <aside className="passport-card">
           <div className="passport-watermark">FP</div><Icon name="passport" className="passport-mark" />
           <p>Fashion Passport</p><h2>{profile.label}</h2>
-          <dl><div><dt>Home</dt><dd>{profile.country}</dd></div><div><dt>Size</dt><dd>{profile.size}</dd></div><div><dt>Height</dt><dd>{profile.heightCm} cm</dd></div></dl>
-          <div className="passport-status"><span></span>Private & ready</div>
+          <dl><div><dt>Home</dt><dd>{profile.country}</dd></div><div><dt>Size</dt><dd>{profile.size}</dd></div><div><dt>Height</dt><dd>{profile.heightCm} cm</dd></div><div><dt>Budget</dt><dd>£{profile.budget} {profile.budgetMode === "strict" ? "(strict)" : "(usual)"}</dd></div></dl>
+          <div className="passport-status"><span></span>Private &amp; ready</div>
         </aside>
         <section className="profile-groups">
-          <div className="profile-layer theory-layer"><div className="profile-title"><div><small>01 · GUIDANCE</small><h3>Likely to suit you</h3></div><button onClick={onRebuild}>Retake</button></div><p>Derived from your proportions, undertone, skin depth and contrast—not from what a model is wearing.</p><div className="theory-results"><span><strong>{profile.bodyShape}</strong> proportions</span><span><strong>{profile.colourSeason}</strong> colouring</span></div><div className="tag-cloud">{[...theory.colours, ...theory.silhouettes, ...theory.necklines].map((value) => <span className="theory-tag" key={value}>{value}</span>)}</div></div>
-          <div className="layer-join"><span>+</span><strong>married to</strong></div>
-          <div className="profile-layer preference-layer"><div className="profile-title"><div><small>02 · PERSONAL TASTE</small><h3>What you actually choose</h3></div><button onClick={onRebuild}>Teach more</button></div><p>Learned from real products across retailers. These choices overrule the guidance layer.</p></div>
-          {preferenceGroups.map(([title, values]) => <div className="profile-group" key={title}><div className="profile-title"><h3>{title}</h3></div><div className="tag-cloud">{values.map((value) => <span key={value}>{value}<small>♥</small></span>)}</div></div>)}
-          <div className="override-callout"><Icon name="sparkle" /><div><strong>Your taste outranks the guidance</strong><p>For example, burnt orange, terracotta and camel remain prioritised because you love them—even if your colour result suggests otherwise.</p></div></div>
-          <div className="avoid-row"><strong>Always avoid</strong><div>{["Polyester", "Boxy", "Cowl neck", "Olive", "Grey", "Taupe"].map(x => <span key={x}>− {x}</span>)}</div></div>
+
+          <div className="profile-layer theory-layer">
+            <div className="profile-title"><div><small>01 · FOUNDATION</small><h3>Likely to suit you</h3></div><button onClick={onRebuild}>Retake</button></div>
+            <p>A starting point from your proportions and colouring. It is the weakest layer in every ranking.</p>
+            <div className="theory-results">
+              <span><strong>{profile.bodyShape}</strong> proportions</span>
+              <span><strong>{profile.colourSeason}</strong> colouring</span>
+            </div>
+            <dl className="theory-detail">
+              <div><dt>Shapes</dt><dd>{theory.silhouettes.join(", ") || "Not set"}</dd></div>
+              <div><dt>Necklines</dt><dd>{theory.necklines.join(", ") || "Not set"}</dd></div>
+              <div><dt>Sleeves &amp; lengths</dt><dd>{[...theory.sleeves, ...theory.lengths].join(", ") || "Not set"}</dd></div>
+              <div><dt>Fabrics</dt><dd>{theory.materials.join(", ") || "Not set"}</dd></div>
+              <div><dt>Palette</dt><dd className="palette-row">{theory.colours.map((colour) => <span key={colour}>{colour}</span>)}</dd></div>
+            </dl>
+          </div>
+
+          <div className="layer-join"><span>+</span><strong>overruled by</strong></div>
+
+          <div className="profile-layer preference-layer">
+            <div className="profile-title"><div><small>02 · WHAT YOU CHOSE</small><h3>Your stated preferences</h3></div><button onClick={onRebuild}>Edit</button></div>
+            <p>Set by you. These outrank the foundation whenever the two disagree.</p>
+            {stated.length === 0 && <p className="empty-layer">Nothing stated yet. The taste pass will fill this in as you react.</p>}
+            {stated.map(([title, group]) => (
+              <div className="profile-group" key={title}>
+                <div className="profile-title"><h3>{title}</h3></div>
+                <div className="tag-cloud">
+                  {group.love.map((value) => <span key={`love-${value}`}>{value}<small>♥</small></span>)}
+                  {group.avoid.map((value) => <span className="tag-avoid" key={`avoid-${value}`}>− {value}</span>)}
+                  {group.never.map((value) => <span className="tag-never" key={`never-${value}`}>✕ {value}</span>)}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="layer-join"><span>+</span><strong>sharpened by</strong></div>
+
+          <div className="profile-layer learned-layer">
+            <div className="profile-title"><div><small>03 · LEARNING AS YOU SHOP</small><h3>What your reactions taught it</h3></div></div>
+            <p>Fashion Passport keeps learning as you shop. You do not need to maintain this profile.</p>
+            {preferences.length === 0
+              ? <p className="empty-layer">No pattern yet. A single reaction never creates a rule; it takes repeated evidence.</p>
+              : <ul className="learned-list">{preferences.map((preference) => {
+                  const [dimension, value] = preference.key.split(":");
+                  return (
+                    <li key={preference.key} className={preference.direction === "positive" ? "learned-up" : "learned-down"}>
+                      <strong>{preference.direction === "positive" ? "More" : "Less"} {value}</strong>
+                      <span>{dimension}</span>
+                      <em>{Math.round(preference.confidence * 100)}% confidence · {preference.interactions} {preference.interactions === 1 ? "reaction" : "reactions"}</em>
+                    </li>
+                  );
+                })}</ul>}
+          </div>
+
+          <div className="override-callout"><Icon name="sparkle" /><div><strong>Your taste outranks the rulebook.</strong><p>Where the foundation and your own choices disagree, your choices win. Learned signals refine the order; they never hide a product.</p></div></div>
+
+          <div className="avoid-row">
+            <strong>Held by your rules</strong>
+            <div>{hardRules.length === 0 ? <span className="empty-rule">Nothing is hard-blocked. Only a Never sets a hard rule.</span> : hardRules.map(({ title, value }) => <span key={`${title}-${value}`}>✕ {value}</span>)}</div>
+          </div>
         </section>
       </div>
     </main>
@@ -128,8 +186,99 @@ function TravelView({ connected, onConnect, onCompare }: { connected: boolean; o
   );
 }
 
+/** The seven trait groups the shopper can set directly. Nothing here is compulsory. */
+const PREFERENCE_STEPS: { dimension: Dimension; field: keyof FashionProfile; title: string; hint: string }[] = [
+  { dimension: "colour", field: "colours", title: "Colours", hint: "Anything you reach for, or never wear." },
+  { dimension: "silhouette", field: "silhouettes", title: "Shapes", hint: "How a garment sits on you." },
+  { dimension: "neckline", field: "necklines", title: "Necklines", hint: "The line across your shoulders and chest." },
+  { dimension: "sleeve", field: "sleeves", title: "Sleeves", hint: "Including straps and off-shoulder." },
+  { dimension: "length", field: "lengths", title: "Lengths", hint: "Where a hem sits." },
+  { dimension: "pattern", field: "patterns", title: "Prints", hint: "Scale matters more than motif." },
+  { dimension: "material", field: "materials", title: "Fabrics", hint: "Never is the only level that hides a product." },
+];
+
+const LEVELS: { level: PreferenceLevel; label: string; help: string }[] = [
+  { level: "love", label: "Love", help: "ranks higher" },
+  { level: "avoid", label: "Avoid", help: "ranks lower, stays visible" },
+  { level: "never", label: "Never", help: "held by your rules" },
+];
+
+function levelOf(group: PreferenceGroup, value: string): PreferenceLevel {
+  if (group.never.includes(value)) return "never";
+  if (group.avoid.includes(value)) return "avoid";
+  if (group.love.includes(value)) return "love";
+  return "neutral";
+}
+
+function withLevel(group: PreferenceGroup, value: string, level: PreferenceLevel): PreferenceGroup {
+  const stripped: PreferenceGroup = {
+    love: group.love.filter((entry) => entry !== value),
+    avoid: group.avoid.filter((entry) => entry !== value),
+    never: group.never.filter((entry) => entry !== value),
+  };
+  if (level === "neutral") return stripped;
+  return { ...stripped, [level]: [...stripped[level], value] };
+}
+
+function PreferenceCards({ profile, onProfile, onDone, onBack }: { profile: FashionProfile; onProfile: (profile: FashionProfile) => void; onDone: () => void; onBack: () => void }) {
+  const [step, setStep] = useState(0);
+  const current = PREFERENCE_STEPS[step];
+  const group = profile[current.field] as PreferenceGroup;
+  const options = VOCABULARY[current.dimension].map(([label]) => label);
+  const set = (value: string, level: PreferenceLevel) => {
+    const next = { ...profile, [current.field]: withLevel(group, value, level) } as FashionProfile;
+    onProfile(next);
+    localStorage.setItem(STORE_PROFILE, JSON.stringify(next));
+  };
+  const chosen = group.love.length + group.avoid.length + group.never.length;
+  return (
+    <section className="onboarding-panel preference-panel">
+      <p className="eyebrow">Optional · skip anything you have no view on</p>
+      <h2>{current.title}</h2>
+      <p>{current.hint}</p>
+      <ul className="preference-cards">
+        {options.map((value) => {
+          const level = levelOf(group, value);
+          return (
+            <li key={value} className={`preference-card level-${level}`}>
+              <span className="preference-name">{value}</span>
+              <span className="preference-levels" role="group" aria-label={`Set a preference for ${value}`}>
+                {LEVELS.map((entry) => (
+                  <button
+                    key={entry.level}
+                    type="button"
+                    aria-pressed={level === entry.level}
+                    className={level === entry.level ? "selected" : ""}
+                    title={entry.help}
+                    onClick={() => set(value, level === entry.level ? "neutral" : entry.level)}
+                  >
+                    {entry.label}
+                  </button>
+                ))}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="preference-footer">
+        <span className="preference-count">{chosen === 0 ? "Nothing set here yet, which is fine" : `${chosen} set`}</span>
+        <div className="preference-actions">
+          <button className="text-button" onClick={step === 0 ? onBack : () => setStep(step - 1)}>Back</button>
+          <button className="text-button" onClick={step === PREFERENCE_STEPS.length - 1 ? onDone : () => setStep(step + 1)}>Skip</button>
+          <button className="primary-button" onClick={step === PREFERENCE_STEPS.length - 1 ? onDone : () => setStep(step + 1)}>
+            {step === PREFERENCE_STEPS.length - 1 ? "Start the taste pass" : "Next"} <Icon name="arrow" />
+          </button>
+        </div>
+      </div>
+      <div className="preference-progress" aria-hidden="true">
+        {PREFERENCE_STEPS.map((entry, index) => <i key={entry.dimension} className={index <= step ? "done" : ""} />)}
+      </div>
+    </section>
+  );
+}
+
 function TasteView({ profile, onProfile, onDone }: { profile: FashionProfile; onProfile: (profile: FashionProfile) => void; onDone: () => void }) {
-  const [stage, setStage] = useState<"intro" | "body" | "colour" | "result" | "taste">("intro");
+  const [stage, setStage] = useState<"intro" | "body" | "colour" | "result" | "preferences" | "taste">("intro");
   const [bodyShape, setBodyShape] = useState("");
   const [undertone, setUndertone] = useState("");
   const [depth, setDepth] = useState("");
@@ -143,6 +292,7 @@ function TasteView({ profile, onProfile, onDone }: { profile: FashionProfile; on
   const [dislikes, setDislikes] = useState(0);
   const [broadened, setBroadened] = useState(false);
   const [reactionNote, setReactionNote] = useState("");
+  const [lastReaction, setLastReaction] = useState<{ keys: string[]; reaction: Reaction; product: Product } | null>(null);
   const estimatedSeason = knownSeason || inferColourSeason(undertone, contrast, depth);
   const derivedProfile = { ...profile, colourSeason: estimatedSeason, bodyShape: bodyShape || profile.bodyShape };
   const applyGuidance = () => {
@@ -167,12 +317,14 @@ function TasteView({ profile, onProfile, onDone }: { profile: FashionProfile; on
     if (!current) return;
     const saved = JSON.parse(localStorage.getItem("fashion-passport:taste-onboarding") || "[]") as { productId: string; reaction: Reaction }[];
     localStorage.setItem("fashion-passport:taste-onboarding", JSON.stringify([...saved.filter((item) => item.productId !== current.id), { productId: current.id, reaction }]));
-    const traits = [current.colour, current.silhouette, current.neckline, current.sleeve, current.pattern, current.material, current.length].filter((trait) => trait !== "Not stated");
-    const votes = JSON.parse(localStorage.getItem(STORE_TASTE_VOTES) || "{}") as Record<string, { up: number; down: number }>;
-    traits.forEach((trait) => { const tally = votes[trait] || { up: 0, down: 0 }; tally[reaction] += 1; votes[trait] = tally; });
-    localStorage.setItem(STORE_TASTE_VOTES, JSON.stringify(votes));
-    const signals = Object.entries(votes).flatMap(([trait, tally]) => tally.up - tally.down >= 2 ? [`love:${trait}`] : tally.down - tally.up >= 2 ? [`avoid:${trait}`] : []);
-    localStorage.setItem(STORE_SIGNALS, JSON.stringify(signals));
+    // Every known trait on the product is recorded, so feedback is never
+    // collapsed onto a single dimension.
+    const keys = traitKeysForProduct(current.evidence as unknown as Record<string, { value: string }>);
+    const stored = JSON.parse(localStorage.getItem(STORE_TASTE_VOTES) || "{}") as LearnedTaste;
+    const updated = recordVote(stored, keys, reaction);
+    localStorage.setItem(STORE_TASTE_VOTES, JSON.stringify(updated));
+    setLastReaction({ keys, reaction, product: current });
+    document.dispatchEvent(new Event("fashion-passport:learned-changed"));
     const nextDislikes = dislikes + (reaction === "down" ? 1 : 0);
     const nextTotal = index + 1;
     setDislikes(nextDislikes);
@@ -198,11 +350,12 @@ function TasteView({ profile, onProfile, onDone }: { profile: FashionProfile; on
   const currentFit = current ? analysisFit(current, derivedProfile) : { score: 0, matches: [] };
   return (
     <main className="onboarding-page">
-      <div className="onboarding-progress"><span className={stage !== "intro" ? "done" : "active"}>1 · You</span><span className={["colour", "result", "taste"].includes(stage) ? "done" : stage === "body" ? "active" : ""}>2 · Shape</span><span className={["result", "taste"].includes(stage) ? "done" : stage === "colour" ? "active" : ""}>3 · Colour</span><span className={stage === "taste" ? "active" : ""}>4 · Taste</span></div>
+      <div className="onboarding-progress"><span className={stage !== "intro" ? "done" : "active"}>1 · You</span><span className={["colour", "result", "taste"].includes(stage) ? "done" : stage === "body" ? "active" : ""}>2 · Shape</span><span className={["result", "taste"].includes(stage) ? "done" : stage === "colour" ? "active" : ""}>3 · Colour</span><span className={["preferences","taste"].includes(stage) ? "done" : ""}>4 · Preferences</span><span className={stage === "taste" ? "active" : ""}>5 · Taste</span></div>
       {stage === "intro" && <section className="onboarding-panel intro-panel"><p className="eyebrow">Your Passport in under 2 minutes</p><h1>First, what may suit you.<br/>Then, what you love.</h1><p>We estimate a useful starting point from your proportions, undertone, skin depth and contrast. Then real-product reactions teach your taste. If the two disagree, your preference wins.</p><div className="scope-choice"><button onClick={() => setStage("body")}><span>Available now</span><strong>Womenswear</strong><small>Build my Passport →</small></button><button disabled><span>Coming soon</span><strong>Menswear</strong><small>The same portable profile model</small></button></div><div className="two-layer-proof"><div><strong>01</strong><span>Suitability guidance<small>Body + colouring</small></span></div><b>+</b><div><strong>02</strong><span>Personal preference<small>Real-product reactions</small></span></div><b>=</b><div><strong>FP</strong><span>Your ranking<small>Preference can overrule</small></span></div></div></section>}
       {stage === "body" && <section className="onboarding-panel question-panel"><p className="eyebrow">About 20 seconds</p><h2>Which shape looks most like your proportions?</h2><p>Start with the visual relationship between shoulders, waist and hips. The text underneath makes the distinction precise.</p><div className="answer-grid body-answers">{bodyOptions.map(([value, label]) => <button className={bodyShape === value ? "selected" : ""} key={value} onClick={() => setBodyShape(value)}><BodyShapeVisual shape={value}/><span className="body-answer-copy"><strong>{value}</strong><small>{label}</small></span></button>)}</div>{bodyShape && <div className="guidance-preview"><BodyShapeVisual shape={bodyShape} compact/><span><strong>Usually worth trying first</strong>{theoryFor(profile.colourSeason, bodyShape).silhouettes.join(", ")} shapes · {theoryFor(profile.colourSeason, bodyShape).necklines.join(", ")} necklines · {theoryFor(profile.colourSeason, bodyShape).materials.join(", ")} fabrics</span></div>}<div className="step-actions"><button className="text-button" onClick={() => setStage("intro")}>← Back</button><button className="primary-button" disabled={!bodyShape} onClick={() => setStage("colour")}>Next: colouring <Icon name="arrow"/></button></div></section>}
-      {stage === "colour" && <section className="onboarding-panel question-panel colour-panel"><p className="eyebrow">About 35 seconds</p><h2>Find your colour starting point</h2><p>Look first, then use the short description to choose. These signals are more useful together than skin colour alone.</p><div className="colour-questions"><fieldset><legend>Undertone</legend><small>Which metal-and-neutral pairing tends to make your skin look clearer?</small><div>{[["cool","Silver + optic white"],["warm","Gold + cream"],["neutral","Both / not sure"]].map(([value,label]) => <button type="button" className={undertone === value ? "selected" : ""} key={value} onClick={() => setUndertone(value)}><ColourSignalVisual group="undertone" value={value}/><span>{label}</span></button>)}</div></fieldset><fieldset><legend>Skin depth</legend><small>Choose the closest visual depth; this does not decide your undertone.</small><div>{[["light","Fair / light"],["medium","Medium / olive"],["deep","Deep"]].map(([value,label]) => <button type="button" className={depth === value ? "selected" : ""} key={value} onClick={() => setDepth(value)}><ColourSignalVisual group="depth" value={value}/><span>{label}</span></button>)}</div></fieldset><fieldset><legend>Natural contrast</legend><small>Look at the visual difference between hair, eyes and skin.</small><div>{[["high","High / striking"],["soft","Soft / blended"],["clear","Clear / bright"]].map(([value,label]) => <button type="button" className={contrast === value ? "selected" : ""} key={value} onClick={() => setContrast(value)}><ColourSignalVisual group="contrast" value={value}/><span>{label}</span></button>)}</div></fieldset></div><label className="known-season">Already know your season?<select value={knownSeason} onChange={(event) => setKnownSeason(event.target.value)}><option value="">Let Passport estimate</option>{["Deep Winter","Soft Summer","Warm Spring","Deep Autumn"].map((season) => <option key={season}>{season}</option>)}</select></label>{undertone && depth && contrast && <div className="guidance-preview colour-preview"><PaletteVisual colours={theoryFor(estimatedSeason, bodyShape || profile.bodyShape).colours}/><span><strong>{estimatedSeason} starting palette</strong>{theoryFor(estimatedSeason, bodyShape || profile.bodyShape).colours.join(", ")} are usually stronger starting points.</span></div>}<div className="step-actions"><button className="text-button" onClick={() => setStage("body")}>← Back</button><button className="primary-button" disabled={!undertone || !depth || !contrast} onClick={applyGuidance}>See my foundation <Icon name="arrow"/></button></div></section>}
-      {stage === "result" && <section className="onboarding-panel result-panel"><p className="eyebrow">Your suitability foundation</p><h2>A starting point—not a rulebook.</h2><div className="foundation-results"><article><BodyShapeVisual shape={derivedProfile.bodyShape} compact/><span>Body proportions</span><strong>{derivedProfile.bodyShape}</strong><p>Try first: {theory.silhouettes.join(", ").toLowerCase()} shapes; {theory.necklines.join(", ").toLowerCase()} necklines; {theory.sleeves.join(", ").toLowerCase()} sleeves; {theory.lengths.join(", ").toLowerCase()} lengths; {theory.materials.join(", ").toLowerCase()} fabrics.</p></article><article><PaletteVisual colours={theory.colours}/><span>Colour direction</span><strong>{derivedProfile.colourSeason}</strong><p>Colours likely to be stronger starting points: {theory.colours.join(", ").toLowerCase()}.</p></article></div><div className="override-callout"><Icon name="sparkle"/><div><strong>You remain in charge</strong><p>The next products primarily follow this analysis. If you dislike more than half, the deck automatically broadens and lets your taste overrule it.</p></div></div><div className="step-actions"><button className="text-button" onClick={() => setStage("colour")}>Adjust answers</button><button className="primary-button" onClick={() => void startTaste()}>Now teach my taste <Icon name="arrow"/></button></div></section>}
+      {stage === "colour" && <section className="onboarding-panel question-panel colour-panel"><p className="eyebrow">About 35 seconds</p><h2>Find your colour starting point</h2><p>Look first, then use the short description to choose. These signals are more useful together than skin colour alone.</p><div className="colour-questions"><fieldset><legend>Undertone</legend><small>Which metal-and-neutral pairing tends to make your skin look clearer?</small><div>{[["cool","Silver + optic white"],["warm","Gold + cream"],["neutral","Both / not sure"]].map(([value,label]) => <button type="button" className={undertone === value ? "selected" : ""} key={value} onClick={() => setUndertone(value)}><ColourSignalVisual group="undertone" value={value}/><span>{label}</span></button>)}</div></fieldset><fieldset><legend>Skin depth</legend><small>Choose the closest visual depth; this does not decide your undertone.</small><div>{[["light","Fair / light"],["medium","Medium / olive"],["deep","Deep"]].map(([value,label]) => <button type="button" className={depth === value ? "selected" : ""} key={value} onClick={() => setDepth(value)}><ColourSignalVisual group="depth" value={value}/><span>{label}</span></button>)}</div></fieldset><fieldset className="known-season"><legend>Already know your season?</legend><small>Skip the estimate and choose it directly. Leave this alone if you are not sure.</small><div><button type="button" className={knownSeason === "" ? "selected" : ""} onClick={() => setKnownSeason("")}>Not sure, estimate it</button>{SEASONS.map((season) => <button type="button" key={season} className={knownSeason === season ? "selected" : ""} onClick={() => setKnownSeason(season)}>{season}</button>)}</div></fieldset><fieldset><legend>Natural contrast</legend><small>Look at the visual difference between hair, eyes and skin.</small><div>{[["high","High / striking"],["soft","Soft / blended"],["clear","Clear / bright"]].map(([value,label]) => <button type="button" className={contrast === value ? "selected" : ""} key={value} onClick={() => setContrast(value)}><ColourSignalVisual group="contrast" value={value}/><span>{label}</span></button>)}</div></fieldset></div><label className="known-season">Already know your season?<select value={knownSeason} onChange={(event) => setKnownSeason(event.target.value)}><option value="">Let Passport estimate</option>{["Deep Winter","Soft Summer","Warm Spring","Deep Autumn"].map((season) => <option key={season}>{season}</option>)}</select></label>{undertone && depth && contrast && <div className="guidance-preview colour-preview"><PaletteVisual colours={theoryFor(estimatedSeason, bodyShape || profile.bodyShape).colours}/><span><strong>{estimatedSeason} starting palette</strong>{theoryFor(estimatedSeason, bodyShape || profile.bodyShape).colours.join(", ")} are usually stronger starting points.</span></div>}<div className="step-actions"><button className="text-button" onClick={() => setStage("body")}>← Back</button><button className="primary-button" disabled={!undertone || !depth || !contrast} onClick={applyGuidance}>See my foundation <Icon name="arrow"/></button></div></section>}
+      {stage === "result" && <section className="onboarding-panel result-panel"><p className="eyebrow">Your suitability foundation</p><h2>A starting point—not a rulebook.</h2><div className="foundation-results"><article><BodyShapeVisual shape={derivedProfile.bodyShape} compact/><span>Body proportions</span><strong>{derivedProfile.bodyShape}</strong><p>Try first: {theory.silhouettes.join(", ").toLowerCase()} shapes; {theory.necklines.join(", ").toLowerCase()} necklines; {theory.sleeves.join(", ").toLowerCase()} sleeves; {theory.lengths.join(", ").toLowerCase()} lengths; {theory.materials.join(", ").toLowerCase()} fabrics.</p></article><article><PaletteVisual colours={theory.colours}/><span>Colour direction</span><strong>{derivedProfile.colourSeason}</strong><p>Colours likely to be stronger starting points: {theory.colours.join(", ").toLowerCase()}.</p></article></div><div className="override-callout"><Icon name="sparkle"/><div><strong>You remain in charge</strong><p>The next products primarily follow this analysis. If you dislike more than half, the deck automatically broadens and lets your taste overrule it.</p></div></div><div className="step-actions"><button className="text-button" onClick={() => setStage("colour")}>Adjust answers</button><button className="primary-button" onClick={() => setStage("preferences")}>Next: what you already know <Icon name="arrow"/></button></div></section>}
+      {stage === "preferences" && <PreferenceCards profile={derivedProfile} onProfile={onProfile} onDone={startTaste} onBack={() => setStage("result")} />}
       {stage === "taste" && <><div className="page-heading compact"><p className="eyebrow">{broadened ? "Taste-led mode" : "Analysis-led mode"} · {sources || "multiple"} live retailers</p><h1>Now make it yours.</h1><p>Twenty rapid reactions reveal patterns across colour, silhouette, neckline, sleeve, length, fabric and print. The first deck follows your analysis; it broadens automatically only if you reject more than half.</p></div><section className="taste-stage">
         <div className="deck-status"><strong>{broadened ? "Your taste has overruled the analysis" : `${theoryAligned} analysis-aligned products found`}</strong><span>{broadened ? "Showing wider choices now" : "Prioritising these before exploration"}</span></div>
         <div className="progress-meta"><span>{loading ? "Building your analysis-led deck" : `${Math.min(index + 1, choices.length)} of ${choices.length} available`}</span><span>{Math.min(index, TASTE_TARGET)} / {TASTE_TARGET} signals</span></div>
@@ -211,6 +364,35 @@ function TasteView({ profile, onProfile, onDone }: { profile: FashionProfile; on
           <div className="taste-card" key={current.id}>{current.imageUrl && <Image className="taste-real-image" src={current.imageUrl} alt={current.name} fill sizes="340px" />}<div className="taste-caption"><strong>{current.brand}</strong><span>{current.name}</span></div></div>
           {currentFit.score > 0 && <div className="theory-nudge"><Icon name="sparkle"/><span><strong>{currentFit.score} analysis {currentFit.score === 1 ? "match" : "matches"}</strong>{currentFit.matches.slice(0, 3).join(" · ")}</span></div>}
           <div className="taste-actions"><button onClick={() => react("down")} aria-label="Not for me"><Icon name="thumbsDown" /><span>Not me</span></button><button className="love" onClick={() => react("up")} aria-label="Love it"><Icon name="thumbsUp" /><span>Love it</span></button></div>
+          {lastReaction && (
+            <div className="reason-prompt" role="status">
+              <span>{lastReaction.reaction === "up" ? "What worked?" : "What put you off?"}</span>
+              <div>
+                {FASHION_DIMENSIONS.map((dimension) => {
+                  const value = (lastReaction.product.evidence as Record<string, { value: string }>)[dimension]?.value;
+                  if (!value || value === "Unknown") return null;
+                  return (
+                    <button
+                      key={dimension}
+                      type="button"
+                      onClick={() => {
+                        const stored = JSON.parse(localStorage.getItem(STORE_TASTE_VOTES) || "{}") as LearnedTaste;
+                        // Reverse the broad signal, then re-apply it to the named trait only.
+                        const narrowed = recordVote(undoVote(stored, lastReaction.keys, lastReaction.reaction), [`${dimension}:${value.toLowerCase()}`], lastReaction.reaction);
+                        localStorage.setItem(STORE_TASTE_VOTES, JSON.stringify(narrowed));
+                        document.dispatchEvent(new Event("fashion-passport:learned-changed"));
+                        setReactionNote(`Noted: ${value.toLowerCase()} only.`);
+                        setLastReaction(null);
+                      }}
+                    >
+                      {value}
+                    </button>
+                  );
+                })}
+                <button type="button" className="reason-skip" onClick={() => setLastReaction(null)}>Skip</button>
+              </div>
+            </div>
+          )}
           <p className="microcopy">{reactionNote || "Stored locally. This real product will not appear again."}</p>
           {index >= TASTE_TARGET && <button className="primary-button taste-finish" onClick={onDone}>Finish my Passport <Icon name="arrow"/></button>}
         </> : <div className="taste-complete"><div className="approval-icon"><Icon name="check" /></div><h2>Your Passport is ready</h2><p>Your suitability foundation and preference patterns are saved locally and ready to travel.</p><button className="primary-button" onClick={onDone}>Take my Passport shopping <Icon name="arrow" /></button></div>}
@@ -242,6 +424,7 @@ export default function Home() {
   const [profile, setProfile] = useState<FashionProfile>(demoProfile);
   const [showApproval, setShowApproval] = useState(false);
   const [learnedAvoid, setLearnedAvoid] = useState<string[]>([]);
+  const [learnedTaste, setLearnedTaste] = useState<LearnedTaste>(emptyLearned());
   const [reactions, setReactions] = useState<Record<string, Reaction>>({});
   const [passportOn, setPassportOn] = useState(true);
   const [showBlocked, setShowBlocked] = useState(false);
@@ -252,11 +435,11 @@ export default function Home() {
   const [catalogueError, setCatalogueError] = useState("");
   const [liveAt, setLiveAt] = useState("");
   const [searchStats, setSearchStats] = useState({ storesQueried: 0, storesResponding: 0, candidatesConsidered: 0 });
-  const stateRef = useRef({ retailerId, connected, learnedAvoid, liveProducts, profile });
+  const stateRef = useRef({ retailerId, connected, learnedAvoid, learnedTaste, liveProducts, profile });
 
   useEffect(() => {
-    stateRef.current = { retailerId, connected, learnedAvoid, liveProducts, profile };
-  }, [retailerId, connected, learnedAvoid, liveProducts, profile]);
+    stateRef.current = { retailerId, connected, learnedAvoid, learnedTaste, liveProducts, profile };
+  }, [retailerId, connected, learnedAvoid, learnedTaste, liveProducts, profile]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -264,6 +447,7 @@ export default function Home() {
         setConnected(localStorage.getItem(STORE_CONNECTED) === "true");
         setView(localStorage.getItem(STORE_ONBOARDED) === "true" ? "travel" : "taste");
         setLearnedAvoid(JSON.parse(localStorage.getItem(STORE_SIGNALS) || "[]"));
+        setLearnedTaste(JSON.parse(localStorage.getItem(STORE_TASTE_VOTES) || "{}") as LearnedTaste);
         const savedProfile = localStorage.getItem(STORE_PROFILE);
         if (savedProfile) setProfile(JSON.parse(savedProfile));
       } catch { /* A fresh local profile is safe fallback. */ }
@@ -271,8 +455,24 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    const sync = () => {
+      try {
+        setLearnedTaste(JSON.parse(localStorage.getItem(STORE_TASTE_VOTES) || "{}") as LearnedTaste);
+      } catch {
+        setLearnedTaste(emptyLearned());
+      }
+    };
+    document.addEventListener("fashion-passport:learned-changed", sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      document.removeEventListener("fashion-passport:learned-changed", sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
+
   const retailer = retailers.find((item) => item.id === retailerId);
-  const ranked = useMemo(() => rankProducts(retailerId === "all" ? liveProducts : liveProducts.filter((product) => product.retailerId === retailerId), { profile, query, learned: legacySignalsToPreferences(learnedAvoid) }), [liveProducts, retailerId, learnedAvoid, profile, query]);
+  const ranked = useMemo(() => rankProducts(retailerId === "all" ? liveProducts : liveProducts.filter((product) => product.retailerId === retailerId), { profile, query, learned: [...derivePreferences(learnedTaste), ...legacySignalsToPreferences(learnedAvoid)] }), [liveProducts, retailerId, learnedAvoid, learnedTaste, profile, query]);
   const visible = (passportOn && connected ? ranked.filter((item) => showBlocked || !item.blocked) : ranked.map((item) => ({ ...item, score: 0 }))).slice(0, 30);
   const hiddenCount = passportOn && connected ? ranked.filter((item) => item.blocked).length : 0;
 
@@ -321,7 +521,7 @@ export default function Home() {
             if (!response.ok) return { status: "network_unavailable", error: payload.error };
             const nextProducts = payload.products || [];
             setRetailerId("all"); setLiveProducts(nextProducts); setLiveAt(payload.liveAt || new Date().toISOString()); setCatalogueState("connected");
-            return { status: "connected", protocol: "Shopify UCP/MCP", storesQueried: payload.storesQueried, storesResponding: payload.storesResponding, request: input.request, matches: rankProducts(nextProducts, { profile: stateRef.current.profile, query: typeof input.request === "string" ? input.request : "", learned: legacySignalsToPreferences(stateRef.current.learnedAvoid) }).slice(0, 10).map(({ id, retailerId, name, brand, price, score, productUrl, reasons }) => ({ id, retailer: retailers.find((item) => item.id === retailerId)?.name, name, brand, price, score, productUrl, reasons: reasons.slice(0, 4).map(r => r.label) })) };
+            return { status: "connected", protocol: "Shopify UCP/MCP", storesQueried: payload.storesQueried, storesResponding: payload.storesResponding, request: input.request, matches: rankProducts(nextProducts, { profile: stateRef.current.profile, query: typeof input.request === "string" ? input.request : "", learned: [...derivePreferences(stateRef.current.learnedTaste), ...legacySignalsToPreferences(stateRef.current.learnedAvoid)] }).slice(0, 10).map(({ id, retailerId, name, brand, price, score, productUrl, reasons }) => ({ id, retailer: retailers.find((item) => item.id === retailerId)?.name, name, brand, price, score, productUrl, reasons: reasons.slice(0, 4).map(r => r.label) })) };
           },
         },
         {
@@ -342,7 +542,7 @@ export default function Home() {
                 return { destination, products: [] as Product[], error: error instanceof Error ? error.message : "Retailer unavailable" };
               }
             }));
-            const matches = rankProducts(responses.flatMap((result) => result.products), { profile: stateRef.current.profile, query: typeof input.request === "string" ? input.request : "", learned: legacySignalsToPreferences(stateRef.current.learnedAvoid) }).slice(0, 10);
+            const matches = rankProducts(responses.flatMap((result) => result.products), { profile: stateRef.current.profile, query: typeof input.request === "string" ? input.request : "", learned: [...derivePreferences(stateRef.current.learnedTaste), ...legacySignalsToPreferences(stateRef.current.learnedAvoid)] }).slice(0, 10);
             return {
               status: matches.length ? "connected" : "no_results",
               protocol: "Shopify UCP/MCP",
@@ -406,7 +606,7 @@ export default function Home() {
     <div className="app-shell">
       <header className="topbar"><button className="brand" onClick={() => setView("travel")}><span><Icon name="passport" /></span><strong>Fashion<br/>Passport</strong></button><nav>{(["travel", "shop", "passport", "taste", "privacy"] as View[]).map((item) => <button key={item} className={view === item ? "active" : ""} onClick={() => setView(item)}>{item === "shop" ? "Compare stores" : item === "taste" ? "Build my Passport" : item[0].toUpperCase() + item.slice(1)}</button>)}</nav><div className="webmcp-pill"><i></i><span>WebMCP ready</span></div></header>
       {view === "travel" && <TravelView connected={connected} onConnect={() => setShowApproval(true)} onCompare={() => setView("shop")}/>}
-      {view === "passport" && <PassportView profile={profile} onRebuild={() => setView("taste")} />}
+      {view === "passport" && <PassportView profile={profile} learned={learnedTaste} onRebuild={() => setView("taste")} />}
       {view === "taste" && <TasteView profile={profile} onProfile={setProfile} onDone={finishOnboarding} />}
       {view === "privacy" && <PrivacyView connected={connected} onRevoke={revoke} />}
       {view === "shop" && <main className="shop-page">
