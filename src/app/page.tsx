@@ -12,6 +12,7 @@ import { SEASONS, theoryFor as seasonTheory } from "@/lib/style-theory";
 import { FASHION_DIMENSIONS, VOCABULARY, pluralCategory, requestedCategory, type Dimension } from "@/lib/ontology";
 import type { LearnedTaste, PreferenceGroup, PreferenceLevel } from "@/lib/types";
 import { inferColourSeason, theoryFor } from "@/lib/style-theory";
+import { readProfile } from "@/lib/profile";
 import type { FashionProfile, Product, Retailer, ScoredProduct } from "@/lib/types";
 
 const STORE_CONNECTED = "fashion-passport:connected";
@@ -95,9 +96,11 @@ function PassportView({ profile, learned, onRebuild }: { profile: FashionProfile
   const stated = groups.filter(([, group]) => group.love.length + group.avoid.length + group.never.length > 0);
   const hardRules = groups.flatMap(([title, group]) => group.never.map((value) => ({ title, value })));
   return (
-    <main className="secondary-page">
-      <div className="page-heading"><p className="eyebrow">Womenswear Passport · Menswear coming soon</p><h1>What suits you.<br/>What you choose.</h1><p>Three layers travel together, kept separate on purpose.</p></div>
-      <div className="passport-layout">
+    <main className="secondary-page verdict-passport-page">
+      <div className="page-heading"><p className="eyebrow">The verdict book · Womenswear</p><h1>What suits you <span className="heart-cross" role="img" aria-label="times"><svg viewBox="0 0 24 30" aria-hidden="true"><path d="M12 14C10 11 3 8 3 4.5 3 1.8 6.5.5 8.8 2.2 10.3 3.2 11.2 4.5 12 6c.8-1.5 1.7-2.8 3.2-3.8C17.5.5 21 1.8 21 4.5 21 8 14 11 12 14Z"/><path d="M12 16c2 3 9 6 9 9.5 0 2.7-3.5 4-5.8 2.3-1.5-1-2.4-2.3-3.2-3.8-.8 1.5-1.7 2.8-3.2 3.8C6.5 29.5 3 28.2 3 25.5 3 22 10 19 12 16Z"/></svg></span> what you love</h1><p>Your foundation, your choices and what Fashion Passport has learned—kept separate so you stay in control.</p></div>
+      <div className="bound-book passport-bound-book">
+        <div className="book-spine" aria-hidden="true">{Array.from({ length: 8 }, (_, index) => <i key={index}/>)}</div>
+        <div className="passport-layout book-page">
         <aside className="passport-card">
           <div className="passport-watermark">FP</div><Icon name="passport" className="passport-mark" />
           <p>Fashion Passport</p><h2>{profile.label}</h2>
@@ -166,6 +169,7 @@ function PassportView({ profile, learned, onRebuild }: { profile: FashionProfile
             <div>{hardRules.length === 0 ? <span className="empty-rule">Nothing is hard-blocked. Only a Never sets a hard rule.</span> : hardRules.map(({ title, value }) => <span key={`${title}-${value}`}>✕ {value}</span>)}</div>
           </div>
         </section>
+        </div>
       </div>
     </main>
   );
@@ -357,8 +361,26 @@ function TasteView({ profile, onProfile, onDone }: { profile: FashionProfile; on
   ];
   const theory = theoryFor(derivedProfile.colourSeason, derivedProfile.bodyShape);
   const currentFit = current ? analysisFit(current, derivedProfile) : { score: 0, matches: [] };
+  const fittingRoom = ["body", "colour", "taste"].includes(stage);
+  const stageProgress: Record<typeof stage, number> = { intro: 8, body: 24, colour: 43, result: 57, preferences: 72, taste: 86 };
+  const stageLabel: Record<typeof stage, string> = {
+    intro: "The fitting room", body: "01 · Proportions", colour: "02 · Colouring",
+    result: "Your foundation", preferences: "03 · Your choices", taste: "04 · Your actual taste",
+  };
   return (
-    <main className="onboarding-page">
+    <main className="onboarding-page verdict-onboarding">
+      <section className="verdict-intro-copy">
+        <p className="verdict-label">Body shape · colour theory · your actual taste</p>
+        <h1>One fitting.<br/>Every shop.</h1>
+        <p className="verdict-lede">Build a portable verdict from what is likely to suit you and what you genuinely love. Then carry it onto compatible fashion stores without starting again.</p>
+        <dl className="verdict-proof"><div><dt>01</dt><dd>Suitability<small>Shape + colouring</small></dd></div><div><dt>02</dt><dd>Preference<small>Explicit + learned</small></dd></div><div><dt>03</dt><dd>Portable<small>One approval</small></dd></div></dl>
+        <p className="verdict-meta">About 90 seconds · learning stays in this browser · menswear coming soon</p>
+      </section>
+      <section className="verdict-stage" data-room={fittingRoom ? "fitting" : "plain"}>
+        <div className="book-spine" aria-hidden="true">{Array.from({ length: 7 }, (_, index) => <i key={index}/>)}</div>
+        <div className="verdict-stage-page">
+          <div className="verdict-stage-top"><p>{stageLabel[stage]}</p><span>{stage === "taste" ? `${Math.min(index, TASTE_TARGET)} of ${TASTE_TARGET} signals` : "Nothing leaves this browser"}</span></div>
+          <div className="verdict-meter" aria-hidden="true"><i style={{ width: `${stage === "taste" ? Math.max(86, Math.min(100, 86 + (index / TASTE_TARGET) * 14)) : stageProgress[stage]}%` }}/></div>
       <div className="onboarding-progress"><span className={stage !== "intro" ? "done" : "active"}>1 · You</span><span className={["colour", "result", "taste"].includes(stage) ? "done" : stage === "body" ? "active" : ""}>2 · Shape</span><span className={["result", "taste"].includes(stage) ? "done" : stage === "colour" ? "active" : ""}>3 · Colour</span><span className={["preferences","taste"].includes(stage) ? "done" : ""}>4 · Preferences</span><span className={stage === "taste" ? "active" : ""}>5 · Taste</span></div>
       {stage === "intro" && <section className="onboarding-panel intro-panel"><p className="eyebrow">Your Passport in under 2 minutes</p><h1 className="intro-headline">What suits you <span className="heart-cross" role="img" aria-label="times"><svg viewBox="0 0 24 30" aria-hidden="true"><path d="M12 14C10 11 3 8 3 4.5 3 1.8 6.5.5 8.8 2.2 10.3 3.2 11.2 4.5 12 6c.8-1.5 1.7-2.8 3.2-3.8C17.5.5 21 1.8 21 4.5 21 8 14 11 12 14Z"/><path d="M12 16c2 3 9 6 9 9.5 0 2.7-3.5 4-5.8 2.3-1.5-1-2.4-2.3-3.2-3.8-.8 1.5-1.7 2.8-3.2 3.8C6.5 29.5 3 28.2 3 25.5 3 22 10 19 12 16Z"/></svg></span> what you love</h1><p>We estimate a useful starting point from your proportions, undertone, skin depth and contrast. Then real-product reactions teach your taste. If the two disagree, your preference wins.</p><div className="scope-choice"><button onClick={() => setStage("body")}><span>Available now</span><strong>Womenswear</strong><small>Build my Passport →</small></button><button disabled><span>Coming soon</span><strong>Menswear</strong><small>The same portable profile model</small></button></div><div className="two-layer-proof"><div><strong>01</strong><span>Suitability guidance<small>Body + colouring</small></span></div><b>+</b><div><strong>02</strong><span>Personal preference<small>Real-product reactions</small></span></div><b>=</b><div><strong>FP</strong><span>Your ranking<small>Preference can overrule</small></span></div></div></section>}
       {stage === "body" && <section className="onboarding-panel question-panel"><p className="eyebrow">About 20 seconds</p><h2>Which shape looks most like your proportions?</h2><p>Start with the visual relationship between shoulders, waist and hips. The text underneath makes the distinction precise.</p><div className="answer-grid body-answers">{bodyOptions.map(([value, label]) => <button className={bodyShape === value ? "selected" : ""} key={value} onClick={() => setBodyShape(value)}><BodyShapeVisual shape={value}/><span className="body-answer-copy"><strong>{value}</strong><small>{label}</small></span></button>)}</div>{bodyShape && <div className="guidance-preview"><BodyShapeVisual shape={bodyShape} compact/><span><strong>Usually worth trying first</strong>{theoryFor(profile.colourSeason, bodyShape).silhouettes.join(", ")} shapes · {theoryFor(profile.colourSeason, bodyShape).necklines.join(", ")} necklines · {theoryFor(profile.colourSeason, bodyShape).materials.join(", ")} fabrics</span></div>}<div className="step-actions"><button className="text-button" onClick={() => setStage("intro")}>← Back</button><button className="primary-button" disabled={!bodyShape} onClick={() => setStage("colour")}>Next: colouring <Icon name="arrow"/></button></div></section>}
@@ -406,6 +428,8 @@ function TasteView({ profile, onProfile, onDone }: { profile: FashionProfile; on
           {index >= TASTE_TARGET && <button className="primary-button taste-finish" onClick={onDone}>Finish my Passport <Icon name="arrow"/></button>}
         </> : <div className="taste-complete"><div className="approval-icon"><Icon name="check" /></div><h2>Your Passport is ready</h2><p>Your suitability foundation and preference patterns are saved locally and ready to travel.</p><button className="primary-button" onClick={onDone}>Take my Passport shopping <Icon name="arrow" /></button></div>}
       </section></>}
+        </div>
+      </section>
     </main>
   );
 }
@@ -460,8 +484,7 @@ export default function Home() {
         setView(localStorage.getItem(STORE_ONBOARDED) === "true" ? "travel" : "taste");
         setLearnedAvoid(JSON.parse(localStorage.getItem(STORE_SIGNALS) || "[]"));
         setLearnedTaste(JSON.parse(localStorage.getItem(STORE_TASTE_VOTES) || "{}") as LearnedTaste);
-        const savedProfile = localStorage.getItem(STORE_PROFILE);
-        if (savedProfile) setProfile(JSON.parse(savedProfile));
+        setProfile(readProfile(localStorage.getItem(STORE_PROFILE), demoProfile));
       } catch { /* A fresh local profile is safe fallback. */ }
     }, 0);
     return () => window.clearTimeout(timer);

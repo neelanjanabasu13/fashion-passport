@@ -1,0 +1,8 @@
+:root{font-family:'Courier New',monospace;color:#2a211e;background:#dad2c7}
+header{background:#e6e0d7;border-color:#b4a99a}
+header>span{border-radius:0;background:#a8462a}
+header small,.status strong,.status span,.intro,.journey small,.stores button,.disconnect{font-family:'Courier New',monospace}
+.status,.stores button{background:#e6e0d7;border-color:#b4a99a}
+.status.ready{background:#e6e0d7}.journey{background:#361d26}
+.journey>span{border-radius:0;background:#a8462a}
+.journey b,header strong{font-family:Georgia,serif;font-weight:400}

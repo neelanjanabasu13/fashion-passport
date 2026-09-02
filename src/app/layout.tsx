@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./verdict.css";
 
 export const metadata: Metadata = {
   title: "Fashion Passport — your taste, everywhere",

@@ -1,72 +1,90 @@
-# Two-minute demo script
+# Prize demo script (2 minutes 40 seconds)
 
-Live hub: [https://fashion-passport.vercel.app](https://fashion-passport.vercel.app)
+Live app: [fashion-passport.vercel.app](https://fashion-passport.vercel.app)
 
-Everything below runs against live retailer endpoints. Figures on screen are
-computed from the response in front of you, so they will differ from the ones
-recorded here.
+Everything runs against live retailer endpoints. Figures are computed from the
+response in front of you and may change between recordings.
 
-## Before you start
+## Before recording
 
-```bash
-npm ci
-npm test
-npm run lint
-npm run build
-npm run start
-```
+1. Load `extension/` unpacked in Chrome 152+ and confirm version 0.8.0.
+2. Keep Nobody's Child, Jigsaw and Lucy & Yak open as fallback retailer tabs.
+3. Reset the Passport connection only if you need to capture the one-time
+   approval; otherwise keep it connected for the portability sequence.
+4. Record at 1440×900 or 1920×1080 with browser zoom set so counts and product
+   names are legible.
 
-Load `extension/` unpacked at `chrome://extensions` with Developer mode on,
-Chrome 152 or newer. Reload the extension after any code change.
+## Exact sequence and voiceover
 
-## The script
+**0:00–0:12 — the problem.** Show a busy fashion category, then the Fashion
+Passport title card.
 
-**0:00 — the problem, in one screen.** Open Nobody's Child at a dresses page
-with the Passport off. The shop shows its whole category. Nothing here is
-personal.
+> Every fashion site forgets you. Your size, budget, colours, proportions and
+> hard noes disappear the moment you change retailer. Fashion Passport makes
+> that context portable.
 
-**0:15 — connect once.** Select the Fashion Passport control. Read the approval
-card aloud: it lists exactly what travels and what stays. Approve.
+**0:12–0:36 — the fitting.** Show the Verdict Book intro, one body-shape visual,
+the colour swatches and a real-product taste reaction.
 
-**0:25 — the grid decides.** The panel reports the live hierarchy: catalogue
-products scanned, dresses found, then strong, worth a look and held by your
-rules. Move through the tiers. Open **Held by rules** and show that every held
-product prints the confirmed rule that held it, and that "sold out in your
-size" is a rule while "contains polyester" is not.
+> A ninety-second fitting combines two datasets retailers keep apart: what may
+> suit you, and what you actually love. Theory is only a starting point. Your
+> preference always wins.
 
-**0:55 — the honest bit.** Find a halterneck. Note that polyester appears as a
-visible conflict on products that state it, and the product is still there. An
-ordinary avoid ranks a product down. Only a Never hides one.
+**0:36–1:00 — human plus agent.** In ChatGPT’s in-app browser ask: “Use my
+Fashion Passport to find a colourful work dress under £100.” Show the WebMCP
+tool call and live results.
 
-**1:10 — teach it.** Press Less on a halterneck. The first reaction reports
-that a single vote changes nothing, because it takes repeated evidence. Press
-Less on three more. The message now names how many products moved, and the
-grid reorders in place. Press Undo and watch it revert.
+> The agent does not guess at the UI or scrape a page. The site exposes typed
+> WebMCP tools. With permission, the agent receives the Passport, calls
+> retailer-owned Shopify catalogues and returns explainable personal matches.
 
-**1:35 — the point of the whole thing.** Open Jigsaw in a new tab. No second
-approval appears. The learned preference is already applied there, on a
-different retailer with a completely different tag vocabulary.
+**1:00–1:24 — truthful breadth.** Show the count hierarchy, move through Strong,
+Worth a look, All products and Held, then press Load 24 more.
 
-**1:55 — close.** Open the Passport. Three layers: what may suit you, what you
-chose, and what your reactions taught it, the last with confidence and
-interaction counts.
+> These are live counts, never hardcoded. Catalogue scanned is different from
+> category-correct; twenty-four is a render batch, never a recommendation cap.
+> Every qualifying item remains reachable.
 
-## Fallback retailers
+**1:24–1:47 — transparent learning.** In Held, show a confirmed sold-out size,
+then react Less to a visible product.
 
-If Nobody's Child is unavailable, use **Jigsaw**, verified 2 September 2026:
-200 catalogue products scanned to exhaustion in 5.6 seconds, 101 dresses found,
-0 wrong-category products admitted. Jigsaw's own search returns 96 non-dresses
-for a dresses query; they are gated out, not counted as held.
+> An Avoid lowers rank but never hides. Only an explicit Never, hard query cap,
+> strict budget or confirmed unavailable size can hold an item. Feedback reranks
+> immediately, but one reaction never creates an overconfident rule. Undo is
+> always available.
 
-If both are unavailable, **Lucy & Yak** also responds. Do not substitute static
-data; say the endpoint is down and demonstrate on a store that responds.
+**1:47–2:17 — the wow moment.** Open Nobody’s Child with the extension, approve
+the listed Passport data once, then open Jigsaw or Lucy & Yak in a new tab.
 
-Note when demonstrating on Jigsaw that attribute coverage is thinner there:
-Jigsaw does not publish structured neckline tags, so more products carry
-"Possible match, limited product information" instead of a percentage. That is
-the evidence-confidence rule working, not a failure.
+> The Passport appears on the retailer’s own website. Open another compatible
+> store: no repeated filters, no rewritten query and no second approval. The
+> same profile and learned taste travel across different catalogues and
+> vocabularies.
 
-## What not to claim
+**2:17–2:40 — why WebMCP / close.** Show the Passport, then a three-box slide:
+Human verdict → WebMCP contract → retailer-owned UCP.
 
-Do not say every Shopify store works. Compatibility is discovered at runtime,
-and the eighteen retailers in `src/lib/data.ts` are the ones actually verified.
+> Without an open tool contract this becomes brittle scraping or
+> retailer-by-retailer integration. With WebMCP, the human supplies judgment,
+> the agent does the catalogue work and retailers keep ownership of inventory.
+> One fitting. Every compatible shop. Fashion Passport.
+
+## Recording rules
+
+- Use a real microphone and continuous voiceover; the challenge requires audio.
+- Keep the final cut below three minutes and upload publicly or unlisted to
+  YouTube.
+- Cut from a started live request to its completed response if a retailer is
+  slow; never imply the products are cached.
+- Avoid scrolling long pages on camera. Cut between the strongest product
+  states.
+
+## Fallbacks and honest claims
+
+If Nobody's Child is unavailable, use Jigsaw. If both are unavailable, use
+Lucy & Yak. Do not substitute static products.
+
+Do not say every Shopify store works. Compatibility is discovered at runtime;
+the eighteen retailers in `src/lib/data.ts` are the directly verified test
+panel. Do not quote a fixed live result count in voiceover. Do say there are no
+paid feeds, retained photos or retailer-specific DOM adapters.

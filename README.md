@@ -4,9 +4,15 @@
 
 Live demonstrator: **[fashion-passport.vercel.app](https://fashion-passport.vercel.app)**
 
+![Fashion Passport Verdict Book onboarding](docs/images/onboarding-desktop-1440.png)
+
+![Live, explainable retailer results](docs/images/retailer-results-1440.png)
+
 Fashion Passport is a portable personal relevance layer for fashion shopping. A shopper connects the Passport once; it can then filter and rerank compatible retailer products using hard constraints, explicit taste, learned feedback, and optional styling theory.
 
 The central rule is deliberately human: **personal preference always overrules colour-season or body-shape theory**.
+
+The product is presented as a **Verdict Book** rather than another preference dashboard: a tactile fitting-room journey leads into a bound Passport, then the same visual language appears on live retailer results and inside the Chrome extension. Every garment a shopper judges is a real retailer-hosted product image.
 
 ## Why this exists
 
@@ -88,7 +94,7 @@ node --check extension/popup.js
 2. Enable **Developer mode**.
 3. Select **Load unpacked**.
 4. Choose this repository’s `extension` directory.
-5. Reload the extension after code updates, then click its toolbar icon to open the Jigsaw → Lucy & Yak travel demo.
+5. Reload the extension after code updates (the final build is **v0.8.0**), then click its toolbar icon to open the Jigsaw → Lucy & Yak travel demo.
 6. Fashion Passport anonymously checks for the standard UCP tools. It renders nothing if the endpoint is absent.
 7. Select the Fashion Passport control and review exactly what will be shared. This is the single connection prompt; subsequent compatible stores and category changes do not ask again.
 8. The extension follows the retailer's official catalogue cursors in pages of up to 250, deduplicates the response, and opens an on-site ranked results panel. The panel distinguishes the top products shown, category-relevant products ranked and complete live catalogue products scanned; it never presents one API page as the retailer's total.
@@ -118,7 +124,7 @@ Retailer themes and markup can change without requiring selector maintenance bec
 
 The transparent rules engine lives in [`src/lib/scoring.ts`](src/lib/scoring.ts), with the four-season and five-body-shape guidance table in [`src/lib/style-theory.ts`](src/lib/style-theory.ts). The table maps body and colour results to starting-point colours, silhouettes, necklines, sleeves, lengths and materials. Ranking combines:
 
-1. hard constraints, including size, budget and avoided materials;
+1. hard constraints: explicit `Never`, a hard query price cap, confirmed size unavailability and strict budget mode;
 2. explicit likes and dislikes;
 3. learned local feedback, promoted only after repeated evidence rather than one overconfident thumbs-down;
 4. lower-weight colour-season and body-shape guidance.
