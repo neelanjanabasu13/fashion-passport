@@ -26,3 +26,13 @@
 .fp-load-more{margin:0 15px 12px!important;padding:10px!important;border:1px solid #d8cbc1!important;background:#fffaf4!important;font:700 12px Arial,sans-serif!important;color:#2b1f1b!important;cursor:pointer!important;width:calc(100% - 30px)!important}
 .fp-result-card li.fp-conflict{color:#8a6a44!important}.fp-result-card li.fp-conflict:before{content:'!'!important;color:#b5873f!important}
 .fp-result-card li.fp-hard{color:#8a4b42!important}.fp-result-card li.fp-hard:before{content:'\2715'!important;color:#8a4b42!important}
+
+/* Product tiers must scroll; flexbox must never compress many cards into strips. */
+.fp-results-grid{grid-template-columns:1fr!important;grid-auto-rows:max-content!important;align-content:start!important;flex:1 1 auto!important;min-height:0!important;gap:12px!important}
+.fp-result-card{min-height:365px!important;flex:none!important}
+.fp-result-card img{height:245px!important}
+.fp-result-card>a>div{min-height:118px!important;padding:12px 12px 42px!important}
+.fp-result-card h3{height:auto!important;min-height:34px!important;font-size:14px!important}
+.fp-result-card li{font-size:9px!important}
+.fp-score{width:50px!important;height:50px!important;font-size:12px!important}
+.fp-feedback button{width:30px!important;height:30px!important}

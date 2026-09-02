@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Fashion Passport",
   "description": "Carry your fashion size, taste and suitability profile across retailers.",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "minimum_chrome_version": "152",
   "permissions": [
     "storage",

@@ -10,56 +10,37 @@ export function BodyShapeVisual({ shape, compact = false }: { shape: string; com
   const widths = bodyPoints[shape] || bodyPoints.Rectangle;
   const left = (width: number) => 50 - width;
   const right = (width: number) => 50 + width;
-  const torso = `M ${left(widths.shoulder)} 34 Q ${left(widths.waist)} 58 ${left(widths.hip)} 86 L ${right(widths.hip)} 86 Q ${right(widths.waist)} 58 ${right(widths.shoulder)} 34 Q 50 25 ${left(widths.shoulder)} 34 Z`;
+  const torso = `M ${left(widths.shoulder)} 22 C ${left(widths.shoulder)} 32 ${left(widths.waist)} 42 ${left(widths.waist)} 55 C ${left(widths.waist)} 69 ${left(widths.hip)} 75 ${left(widths.hip)} 91 Q 50 105 ${right(widths.hip)} 91 C ${right(widths.hip)} 75 ${right(widths.waist)} 69 ${right(widths.waist)} 55 C ${right(widths.waist)} 42 ${right(widths.shoulder)} 32 ${right(widths.shoulder)} 22 Q 50 15 ${left(widths.shoulder)} 22 Z`;
   return (
     <svg className={`body-shape-visual ${compact ? "compact" : ""}`} viewBox="0 0 100 120" aria-hidden="true">
-      <defs><linearGradient id={`body-${shape.replace(/\s/g, "-")}`} x1="0" y1="0" x2="1" y2="1"><stop stopColor="#a34a69"/><stop offset="1" stopColor="#66203d"/></linearGradient></defs>
-      <circle cx="50" cy="15" r="9" fill="#d8b49f"/>
-      <path d={torso} fill={`url(#body-${shape.replace(/\s/g, "-")})`} />
-      <path d={`M ${left(widths.hip)} 84 L 39 113 M ${right(widths.hip)} 84 L 61 113`} stroke="#70334a" strokeWidth="8" strokeLinecap="round"/>
-      <path d={`M ${left(widths.shoulder) + 3} 37 L 15 78 M ${right(widths.shoulder) - 3} 37 L 85 78`} stroke="#8d415d" strokeWidth="7" strokeLinecap="round"/>
-      <path d={`M ${left(widths.shoulder)} 34 H ${right(widths.shoulder)} M ${left(widths.hip)} 86 H ${right(widths.hip)}`} stroke="#fff" strokeOpacity=".7" strokeWidth="1.5" strokeDasharray="3 3"/>
+      <path d={torso} fill="#f4e4e8" stroke="#7f2146" strokeWidth="2.5" />
+      <path d={`M ${left(widths.shoulder)} 22 H ${right(widths.shoulder)} M ${left(widths.waist)} 55 H ${right(widths.waist)} M ${left(widths.hip)} 88 H ${right(widths.hip)}`} stroke="#7f2146" strokeWidth="1.4" strokeDasharray="3 2"/>
+      <circle cx={left(widths.shoulder)} cy="22" r="2" fill="#7f2146"/><circle cx={right(widths.shoulder)} cy="22" r="2" fill="#7f2146"/>
+      <circle cx={left(widths.waist)} cy="55" r="2" fill="#7f2146"/><circle cx={right(widths.waist)} cy="55" r="2" fill="#7f2146"/>
+      <circle cx={left(widths.hip)} cy="88" r="2" fill="#7f2146"/><circle cx={right(widths.hip)} cy="88" r="2" fill="#7f2146"/>
+      {!compact && <><text x="4" y="25">S</text><text x="4" y="58">W</text><text x="4" y="91">H</text></>}
     </svg>
   );
 }
 
 type SignalGroup = "undertone" | "depth" | "contrast";
 
-const signalLooks: Record<SignalGroup, Record<string, { skin: string; hair: string; eye: string; accentA: string; accentB: string }>> = {
-  undertone: {
-    cool: { skin: "#dca98f", hair: "#3b2928", eye: "#3e5968", accentA: "#d8dde1", accentB: "#ffffff" },
-    warm: { skin: "#c98d62", hair: "#3f271c", eye: "#5f4a2c", accentA: "#d7ab52", accentB: "#f4e4c7" },
-    neutral: { skin: "#aa7355", hair: "#332521", eye: "#494238", accentA: "#c4c6c7", accentB: "#d2a54b" },
-  },
-  depth: {
-    light: { skin: "#efc5ad", hair: "#a36e52", eye: "#70828a", accentA: "#f3d4c3", accentB: "#fff2e8" },
-    medium: { skin: "#b87954", hair: "#473026", eye: "#4d5b46", accentA: "#b87954", accentB: "#d29b70" },
-    deep: { skin: "#633d31", hair: "#211817", eye: "#31251f", accentA: "#633d31", accentB: "#93634e" },
-  },
-  contrast: {
-    high: { skin: "#e9b99d", hair: "#241a1a", eye: "#26323a", accentA: "#211a1a", accentB: "#f4d4c0" },
-    soft: { skin: "#c58b6d", hair: "#866b60", eye: "#6b6761", accentA: "#92766d", accentB: "#cda18a" },
-    clear: { skin: "#8f5a43", hair: "#211817", eye: "#2a8380", accentA: "#2a8380", accentB: "#b94567" },
-  },
-};
-
 export function ColourSignalVisual({ group, value }: { group: SignalGroup; value: string }) {
-  const look = signalLooks[group][value] || signalLooks[group][Object.keys(signalLooks[group])[0]];
+  const undertone: Record<string, string[]> = { cool: ["#c8ced5", "#ffffff", "#e8b7aa", "#9c665c"], warm: ["#d9aa43", "#f6e7c8", "#e5ad82", "#9d603f"], neutral: ["#c8ced5", "#d9aa43", "#d3a083", "#80503d"] };
+  const depth: Record<string, string[]> = { light: ["#f7dfd1", "#efc4aa", "#dca27f", "#b97855"], medium: ["#edc7ad", "#d99d78", "#b97855", "#925d43"], deep: ["#ad7154", "#81503e", "#5d382e", "#321f1c"] };
+  const contrast: Record<string, string[]> = { high: ["#171515", "#fbf8ef", "#9d244c", "#f1c8ae"], soft: ["#7f706c", "#b8a29a", "#d8b8a7", "#eee2d8"], clear: ["#147d83", "#b7265a", "#f1bf2f", "#f8f3e8"] };
+  const swatches = (group === "undertone" ? undertone : group === "depth" ? depth : contrast)[value];
   return (
     <svg className="colour-signal-visual" viewBox="0 0 140 86" aria-hidden="true">
-      <rect width="140" height="86" rx="8" fill="#f5eee8"/>
-      <circle cx="20" cy="18" r="11" fill={look.accentA}/><circle cx="119" cy="67" r="13" fill={look.accentB}/>
-      <path d="M46 36 C46 9 94 9 94 36 V67 H46Z" fill={look.hair}/>
-      <ellipse cx="70" cy="43" rx="20" ry="25" fill={look.skin}/>
-      <path d="M50 34 Q70 10 90 34 Q84 20 70 19 Q56 20 50 34" fill={look.hair}/>
-      <circle cx="62" cy="42" r="2.2" fill={look.eye}/><circle cx="78" cy="42" r="2.2" fill={look.eye}/>
-      <path d="M64 54 Q70 58 76 54" fill="none" stroke="#7d413b" strokeWidth="1.4" strokeLinecap="round"/>
-      <rect x="9" y="63" width="22" height="8" rx="4" fill={look.accentA}/><rect x="108" y="16" width="22" height="8" rx="4" fill={look.accentB}/>
+      <rect width="140" height="86" rx="8" fill="#f6f1eb"/>
+      {swatches.map((colour, index) => <rect key={colour} x={8 + index * 31} y="10" width="27" height="66" rx="13.5" fill={colour}/>) }
+      <path d="M8 68 Q70 45 132 68" fill="none" stroke="#fff" strokeOpacity=".7" strokeWidth="2"/>
     </svg>
   );
 }
 
+export const COLOUR_SWATCHES: Record<string, string> = { Black: "#1d1b1c", White: "#f8f6ef", Red: "#a21f3f", "Dark pink": "#aa3766", "Jewel tones": "linear-gradient(135deg,#173f8a,#14766c,#713987)", Blue: "#245e9a", Grey: "#92989d", Pink: "#d0879f", Taupe: "#968478", Green: "#557d61", "Burnt orange": "#c45c2e", Orange: "#e87937", Yellow: "#e0b744", Camel: "#b4875e", Terracotta: "#b4513d", Olive: "#6d7548", Brown: "#684737", Navy: "#172d53", Purple: "#6c3b78", Multi: "linear-gradient(135deg,#a21f3f 0 25%,#e0b744 25% 50%,#245e9a 50% 75%,#557d61 75%)" };
+
 export function PaletteVisual({ colours }: { colours: string[] }) {
-  const colourMap: Record<string, string> = { Black: "#1d1b1c", White: "#f8f6ef", Red: "#a21f3f", "Dark pink": "#aa3766", "Jewel tones": "#16666c", Blue: "#245e9a", Grey: "#92989d", Pink: "#d0879f", Taupe: "#968478", Green: "#557d61", "Burnt orange": "#c45c2e", Yellow: "#e0b744", Camel: "#b4875e", Terracotta: "#b4513d", Olive: "#6d7548", Brown: "#684737" };
-  return <div className="palette-visual" aria-label={`${colours.join(", ")} palette`}>{colours.map((colour) => <span key={colour} style={{ background: colourMap[colour] || "#7f2146" }} title={colour}/>)}</div>;
+  return <div className="palette-visual" aria-label={`${colours.join(", ")} palette`}>{colours.map((colour) => <span key={colour} style={{ background: COLOUR_SWATCHES[colour] || "#7f2146" }} title={colour}/>)}</div>;
 }

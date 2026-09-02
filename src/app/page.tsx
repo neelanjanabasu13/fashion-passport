@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import Image from "next/image";
 import { DressArt } from "@/components/dress-art";
 import { Icon } from "@/components/icons";
-import { BodyShapeVisual, ColourSignalVisual, PaletteVisual } from "@/components/profile-visuals";
+import { BodyShapeVisual, COLOUR_SWATCHES, ColourSignalVisual, PaletteVisual } from "@/components/profile-visuals";
 import { demoProfile, retailers } from "@/lib/data";
 import { analysisFit, partitionResults, rankProducts, scoreLabel } from "@/lib/scoring";
 import { derivePreferences, emptyLearned, legacySignalsToPreferences, recordVote, traitKeysForProduct, undoVote } from "@/lib/learned";
@@ -250,7 +250,7 @@ function PreferenceCards({ profile, onProfile, onDone, onBack }: { profile: Fash
           const level = levelOf(group, value);
           return (
             <li key={value} className={`preference-card level-${level}`}>
-              <span className="preference-name">{value}</span>
+              <span className="preference-name">{current.dimension === "colour" && <i className="colour-choice-swatch" style={{ background: COLOUR_SWATCHES[value] || "#7f2146" }} aria-hidden="true"/>}{value}</span>
               <span className="preference-levels" role="group" aria-label={`Set a preference for ${value}`}>
                 {LEVELS.map((entry) => (
                   <button
