@@ -36,7 +36,7 @@ The web demonstrator searches an 18-store directly verified **test panel** with 
 
 Against Nobody's Child alone with the query "dresses", the catalogue was read to exhaustion: 1,000 products scanned across 25 cursor pages with no pages remaining, 980 dresses found, 382 strong, 299 worth a look, 77 other and 222 held. Zero wrong-category products were admitted to the claimed dress set. Scores ranged from 29 to 99 across 71 distinct values.
 
-This panel proves the adapter; it does not define its reach. Travel mode accepts any store the user chooses and the extension discovers compatibility at runtime. Searching every Shopify store at once would require a merchant directory and a global index; Shopify exposes per-store endpoints, not a public global catalogue endpoint. No paid API, product feed, licensed styling database or retained photo is required.
+This panel proves the adapter; it does not define its reach. Store mode accepts any store the user chooses and the extension discovers compatibility at runtime. Searching every Shopify store at once would require a merchant directory and a global index; Shopify exposes per-store endpoints, not a public global catalogue endpoint. No paid API, product feed, licensed styling database or retained photo is required.
 
 ### WebMCP tools
 

@@ -470,7 +470,7 @@ function TasteView({ profile, onProfile, onDone }: { profile: FashionProfile; on
           )}
           <p className="microcopy">{reactionNote || "Stored locally. This real product will not appear again."}</p>
           {index >= TASTE_TARGET && <button className="primary-button taste-finish" onClick={onDone}>Finish my Passport <Icon name="arrow"/></button>}
-        </> : <div className="taste-complete"><div className="approval-icon"><Icon name="check" /></div><h2>Your Passport is ready</h2><p>Your suitability foundation and preference patterns are saved locally and ready to travel.</p><button className="primary-button" onClick={onDone}>Take my Passport shopping <Icon name="arrow" /></button></div>}
+        </> : <div className="taste-complete"><div className="approval-icon"><Icon name="check" /></div><h2>Your Passport is ready</h2><p>Your suitability foundation and preference patterns are saved locally and ready to use across compatible stores.</p><button className="primary-button" onClick={onDone}>See my Passport <Icon name="arrow" /></button></div>}
       </section></>}
         </div>
       </section>
@@ -807,7 +807,7 @@ export default function Home() {
           </> : <section className={`live-site-only ${catalogueState === "error" ? "has-error" : ""}`}><div className="live-site-icon"><Icon name={catalogueState === "error" ? "close" : "external"} /></div><p className="eyebrow">{catalogueState === "error" ? "Live connection needs another try" : "Retailer-owned products only"}</p><h2>{catalogueState === "error" ? catalogueError : `Search ${retailers.length} live fashion stores together.`}</h2><p>{catalogueState === "error" ? "No cached or invented products have replaced the retailer response." : "Connect once. Fashion Passport calls every verified retailer-owned Shopify endpoint, enforces the requested garment category, and ranks what comes back. Every qualifying product stays reachable through the tiers and Load more."}</p>{connected ? <button className="primary-button" onClick={() => void loadCatalogue(query)}>Search live stores <Icon name="arrow" /></button> : <button className="primary-button" onClick={() => setShowApproval(true)}>Connect once <Icon name="arrow" /></button>}<small>For the on-site experience, load the extension and open any compatible Shopify store.</small></section>}
         </section>
       </main>}
-      <footer><span>Fashion Passport</span><p>Your taste travels. Your data doesn’t.</p><button onClick={() => setView("privacy")}>Privacy &amp; permissions</button><div>Built for the WebMCP Challenge · 2026</div></footer>
+      <footer><span>Fashion Passport</span><p>One profile. Every compatible shop.</p><button onClick={() => setView("privacy")}>Privacy &amp; permissions</button><div>Built for the WebMCP Challenge · 2026</div></footer>
       {showApproval && (
         <ApprovalModal profile={profile} onApprove={connectPassport} onClose={() => setShowApproval(false)}/>
       )}
