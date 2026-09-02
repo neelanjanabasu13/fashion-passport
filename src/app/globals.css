@@ -207,11 +207,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .two-layer-proof>b { color:#d7a7b8; }
 .question-panel h2,.result-panel h2 { text-align:center; margin:8px 0 10px; font:500 clamp(32px,4vw,45px)/1.05 Georgia,serif; letter-spacing:-.035em; }
 .answer-grid { display:grid; gap:9px; }
-.body-answers { grid-template-columns:1fr 1fr; }
+.body-answers { grid-template-columns:repeat(5,1fr); }
 .answer-grid button,.colour-questions button { border:1px solid #d9cec4; background:white; padding:14px; text-align:left; cursor:pointer; }
 .answer-grid button.selected,.colour-questions button.selected { border-color:var(--berry); box-shadow:inset 0 0 0 1px var(--berry); background:#fff5f8; }
 .answer-grid button strong { display:block; font-size:11px; }
 .answer-grid button small { display:block; color:#8c7e77; font-size:8px; margin-top:5px; }
+.body-answers button { padding:10px 8px 12px; display:flex; flex-direction:column; align-items:center; text-align:center; }
+.body-shape-visual { width:86px; max-width:100%; height:112px; display:block; }
+.body-shape-visual.compact { width:48px; height:62px; flex:0 0 auto; }
+.body-answer-copy { display:block; min-height:47px; }
+.body-answer-copy strong { font:500 13px Georgia,serif; }
+.body-answer-copy small { line-height:1.35; }
 .step-actions { margin-top:28px; display:flex; align-items:center; justify-content:space-between; }
 .step-actions .text-button { margin:0; }
 .primary-button:disabled { opacity:.42; cursor:not-allowed; }
@@ -220,15 +226,22 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .colour-questions legend { padding:0 7px; font:500 17px Georgia,serif; }
 .colour-questions fieldset>small { color:var(--muted); font-size:8px; display:block; margin-bottom:9px; }
 .colour-questions fieldset>div { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; }
-.colour-questions button { text-align:center; font-size:9px; }
+.colour-questions button { text-align:center; font-size:9px; padding:6px 6px 10px; display:flex; flex-direction:column; align-items:stretch; gap:7px; }
+.colour-questions button>span { min-height:18px; display:grid; place-items:center; font-weight:700; }
+.colour-signal-visual { width:100%; height:auto; display:block; border-radius:6px; }
 .known-season { margin-top:13px; padding:11px 13px; background:#f5f1eb; display:flex; justify-content:space-between; align-items:center; font-size:9px; font-weight:800; }
 .known-season select { border:1px solid #d7ccc2; background:white; padding:8px; font-size:9px; }
 .guidance-preview { margin-top:13px; display:flex; align-items:flex-start; gap:10px; padding:12px 14px; border:1px solid #cbd9c9; background:#f2f7f0; color:#526557; }
 .guidance-preview svg { width:20px; flex:0 0 auto; color:var(--green); }
 .guidance-preview span { display:flex; flex-direction:column; font-size:9px; line-height:1.5; }
 .guidance-preview strong { color:#2f4e39; font-size:10px; margin-bottom:2px; }
+.guidance-preview.colour-preview { align-items:center; }
+.palette-visual { display:flex; gap:5px; min-width:122px; }
+.palette-visual span { width:18px; height:38px; border-radius:99px; border:1px solid #00000014; box-shadow:inset 0 0 0 1px #ffffff55; }
 .foundation-results { display:grid; grid-template-columns:1fr 1fr; gap:13px; margin:25px 0 15px; }
 .foundation-results article { border:1px solid #cbd9c9; background:#f4f8f2; padding:22px; }
+.foundation-results article>.body-shape-visual { float:right; margin:-10px -4px 7px 12px; }
+.foundation-results article>.palette-visual { margin-bottom:15px; }
 .foundation-results span { display:block; color:var(--green); font-size:8px; font-weight:900; text-transform:uppercase; letter-spacing:.1em; }
 .foundation-results strong { display:block; margin:7px 0 10px; font:500 27px Georgia,serif; }
 .foundation-results p { margin:0; color:#667269; font-size:9px; line-height:1.55; }
@@ -308,3 +321,4 @@ footer div { text-transform:uppercase; letter-spacing:.08em; font-size:8px; }
 @media (max-width:1000px) { .product-grid { grid-template-columns:repeat(2,1fr); }.topbar nav { gap:18px; }.webmcp-pill span{display:none}.passport-layout{grid-template-columns:280px 1fr}.privacy-grid{grid-template-columns:1fr}.travel-demo{grid-template-columns:1fr}.verified-destinations>div:last-child{grid-template-columns:repeat(2,1fr)} }
 @media (max-width:700px) { .topbar{height:68px;padding:0 18px}.brand strong{display:none}.topbar nav{gap:13px;overflow-x:auto}.topbar nav button{font-size:10px;white-space:nowrap}.webmcp-pill{padding:7px}.hero-copy{padding:48px 18px 40px}.hero-copy h1{font-size:47px}.hero-copy>p:not(.eyebrow){font-size:15px}.scale-proof{border-radius:9px;flex-wrap:wrap;line-height:1.4}.scale-proof i{display:none}.search-box{height:auto;padding:9px;flex-wrap:wrap}.search-box input{height:42px;font-size:14px}.search-box button{width:100%}.query-chips{display:none}.storefront{width:100%;border-left:0;border-right:0}.retailer-strip{padding-left:16px}.retailer-tabs{gap:20px}.retailer-strip>a{display:none}.store-heading{padding:18px 16px;align-items:flex-start;gap:10px}.store-label strong{font-size:17px}.native-status{margin-left:0}.passport-switch>div{display:none}.passport-switch{padding:7px;gap:0}.applied-banner,.permission-banner{margin:0 16px 15px;align-items:flex-start}.permission-banner button{font-size:0}.permission-banner button svg{width:18px}.search-evidence{margin:0 16px;grid-template-columns:auto 1fr}.catalogue-toolbar{margin:0 16px}.product-grid{padding:0 16px 20px;grid-template-columns:1fr;gap:14px}.product-visual{height:390px}.product-copy{padding:15px}.product-copy h3{font-size:17px}.reason-list{min-height:73px}.reaction-row button{width:38px;height:38px}.match-badge{width:54px;height:54px}.secondary-page,.taste-page{padding:48px 18px 80px}.page-heading h1{font-size:43px}.passport-layout{grid-template-columns:1fr}.passport-card{width:330px;max-width:100%;margin:auto}.avoid-row{align-items:flex-start;flex-direction:column}.privacy-principles article{grid-template-columns:35px 1fr}.privacy-principles article>span{grid-column:2}.approval-modal{padding:34px 20px 24px}.share-preview>div{flex-direction:column;gap:4px}.share-preview strong{text-align:left}.onboarding-page{padding:22px 14px 70px}.onboarding-panel{padding:30px 18px}.scope-choice,.body-answers,.foundation-results{grid-template-columns:1fr}.two-layer-proof{grid-template-columns:1fr}.two-layer-proof>b{display:none}.colour-questions fieldset>div{grid-template-columns:1fr}.known-season{align-items:flex-start;flex-direction:column;gap:8px}.step-actions{gap:12px}.step-actions .primary-button{font-size:9px}.theory-results{grid-template-columns:1fr}footer{flex-wrap:wrap;padding:24px 18px;gap:8px}footer p{flex-basis:100%;margin:0} }
 @media (max-width:700px) { .travel-page{padding:45px 16px 75px}.travel-hero h1{font-size:53px}.travel-hero>p:not(.eyebrow){font-size:15px}.travel-status{align-items:flex-start}.travel-status button{white-space:nowrap}.travel-demo-copy{padding:28px 22px}.travel-demo-copy h2{font-size:29px}.travel-pair{padding:16px}.any-store{grid-template-columns:1fr;padding:21px}.any-store form{flex-direction:column}.verified-destinations>div:first-child{display:block}.verified-destinations .eyebrow{margin-bottom:6px}.verified-destinations>div:first-child>span{display:block;margin-top:5px}.verified-destinations>div:last-child{grid-template-columns:1fr} }
+@media (max-width:700px) { .body-answers{grid-template-columns:repeat(2,1fr)}.body-answers button{min-height:180px}.colour-signal-visual{max-height:115px}.palette-visual{min-width:auto}.palette-visual span{width:15px;height:32px} }
