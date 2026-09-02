@@ -50,6 +50,7 @@
   let products = [];
   let learnedVotes = {};
   let lastReaction = null;
+  let agentUpdateNotice = null;
   let ranked = [];
   let currentScan = { scanned: 0, pages: 0, complete: false, cursor: null };
 
@@ -166,6 +167,7 @@
       + `<form><input value="${escapeHtml(query)}" aria-label="Search this retailer"><button>Rank</button></form>`
       + `<div class="fp-result-summary"><strong>${scannedLabel}</strong> catalogue products scanned · ${categoryLine}<br>${counts.strong} strong · ${counts.worth} worth a look · ${counts.other} other · ${counts.held} held by your rules</div>`
       + `<nav class="fp-tiers">${tiers.map(([key, label, count]) => `<button data-tier="${key}" class="${panelTier === key ? "is-on" : ""}">${escapeHtml(label)} <i>${count}</i></button>`).join("")}</nav>`
+      + (agentUpdateNotice ? `<div class="fp-learned"><span>${escapeHtml(agentUpdateNotice)}</span></div>` : "")
       + (lastReaction ? `<div class="fp-learned"><span>Passport learned: ${escapeHtml(lastReaction.label)}.${lastReaction.moved > 0 ? ` ${lastReaction.moved} ${lastReaction.moved === 1 ? "product" : "products"} moved.` : " It takes repeated evidence to change the order."}</span><button class="fp-undo">Undo</button>${lastReaction.options.length ? `<div class="fp-reasons"><em>${lastReaction.direction === "up" ? "What worked?" : "What put you off?"}</em>${lastReaction.options.map((option) => `<button class="fp-reason" data-key="${escapeHtml(option.key)}">${escapeHtml(option.value)}</button>`).join("")}<button class="fp-reason fp-reason-skip">Skip</button></div>` : ""}</div>` : "")
       + `<div class="fp-results-grid">${cards || `<p class="fp-empty">This tier is empty, so try another tier or a broader search.</p>`}</div>`
       + (remaining > 0 ? `<button class="fp-load-more">Load ${Math.min(24, remaining)} more · ${remaining} still to see</button>` : "")
@@ -252,6 +254,28 @@
 
   const persistVotes = async () => {
     try { await chrome.storage.local.set({ [votesKey]: learnedVotes }); } catch { /* storage unavailable */ }
+  };
+
+  const updateAgentPreference = (action) => {
+    if (!approved) { showApproval(); return { status: "connection_required", retailer: host }; }
+    const groups = { colour: "colours", silhouette: "silhouettes", neckline: "necklines", sleeve: "sleeves", length: "lengths", pattern: "patterns", material: "materials" };
+    const groupKey = groups[action.dimension];
+    const preference = ["love", "avoid", "never"].includes(action.preference) ? action.preference : null;
+    const canonical = groupKey ? FE.mapToCanonical(action.dimension, String(action.value || "")) : null;
+    if (!groupKey || !preference || !canonical) return { status: "invalid_preference", retailer: host };
+    const nextGroup = { ...profile[groupKey] };
+    for (const level of ["love", "avoid", "never"]) nextGroup[level] = (nextGroup[level] || []).filter((item) => item.toLowerCase() !== canonical.toLowerCase());
+    nextGroup[preference] = [...nextGroup[preference], canonical];
+    profile = { ...profile, [groupKey]: nextGroup };
+    document.documentElement.dataset.fashionPassportProfile = JSON.stringify(profile);
+    void chrome.storage.local.set({ [profileKey]: profile });
+    const query = panel?.querySelector("input")?.value.trim() || queryFromPage();
+    const before = ranked.map((item) => item.id);
+    if (products.length) ranked = scoreAll(products, query);
+    const moved = ranked.reduce((total, item, index) => total + (before[index] === item.id ? 0 : 1), 0);
+    agentUpdateNotice = `Fashion Passport now treats ${canonical} as ${preference}, and ${moved} ${moved === 1 ? "product moved" : "products moved"}.`;
+    if (panel) renderPanel(query);
+    return { status: "updated", retailer: host, dimension: action.dimension, value: canonical, preference, productsReranked: ranked.length, productsMoved: moved };
   };
 
   const togglePanel = () => {
@@ -396,6 +420,7 @@
     document.documentElement.dataset.fashionPassportCompatible = "true";
     document.documentElement.dataset.fashionPassportEndpoint = endpoint;
     document.documentElement.dataset.fashionPassportApproved = String(approved);
+    document.documentElement.dataset.fashionPassportProfile = JSON.stringify(profile);
     document.dispatchEvent(new Event("fashion-passport:compatibility"));
     root = document.createElement("div"); root.id = "fashion-passport-extension-root"; document.documentElement.appendChild(root); renderPill();
   };
@@ -404,6 +429,7 @@
     let action = {}; try { action = JSON.parse(document.documentElement.dataset.fashionPassportAction || "{}"); } catch { /* Ignore invalid page data. */ }
     if (action.action === "request-approval") showApproval();
     if (action.action === "personalize") searchCatalogue(action.request || queryFromPage());
+    if (action.action === "update-preference") document.documentElement.dataset.fashionPassportActionResult = JSON.stringify(updateAgentPreference(action));
   });
   init();
 })();
