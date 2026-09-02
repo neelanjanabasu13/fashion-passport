@@ -1,6 +1,7 @@
 {
   "name": "fashion-passport",
   "version": "0.1.0",
+  "description": "A portable personal relevance layer for fashion shopping across compatible retailer sites.",
   "private": true,
   "scripts": {
     "dev": "next dev",

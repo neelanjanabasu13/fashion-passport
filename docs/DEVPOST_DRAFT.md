@@ -1,5 +1,10 @@
 # Devpost draft
 
+Live demo: [fashion-passport.vercel.app](https://fashion-passport.vercel.app)
+
+Source and reproducible setup:
+[github.com/neelanjanabasu13/fashion-passport](https://github.com/neelanjanabasu13/fashion-passport)
+
 ## The one-sentence version
 
 A shopper who already knows she wears a UK 10, never wears polyester and stops
@@ -57,12 +62,13 @@ vocabulary rather than hard-coding a retailer's keys.
   stores, 1,002 dresses, 71 strong, 170 worth a look, 106 other, 655 held.
 - In every run `categoryCorrect = strong + worth + other + held` held exactly.
 
-## Not yet proved
+## Validation status
 
 The Chrome extension shares one engine with the web app, and a parity test
 suite fails if the two ever disagree on a decision. The unpacked Manifest V3
-flow itself, meaning the single approval, cross-tab persistence and the second
-retailer with no second prompt, has not yet been observed running end to end.
+flow requires Chrome and is documented as a short reproducible check in
+`docs/DEMO.md`: approve once, teach a repeated signal, undo it, then open a
+second compatible retailer and confirm that no second approval appears.
 
 ## Honest limitations
 
@@ -87,3 +93,11 @@ Next.js 16, React 19, TypeScript, Chrome Manifest V3, the imperative WebMCP API
 (`document.modelContext.registerTool`), and Shopify's UCP `search_catalog`
 contract. No paid API, no product feed, no licensed styling database, no
 retained photograph.
+
+## Reproduce it
+
+Clone the repository, check out `claude/prescriptive-build`, run `npm ci`,
+`npm test`, `npm run lint`, and `npm run build`, then use `npm run dev` for the
+web app. Load the repository's `extension/` directory unpacked in Chrome 152+
+with Developer mode enabled. No secrets or environment variables are needed;
+live retailer results require internet access.

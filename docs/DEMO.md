@@ -1,5 +1,7 @@
 # Two-minute demo script
 
+Live hub: [https://fashion-passport.vercel.app](https://fashion-passport.vercel.app)
+
 Everything below runs against live retailer endpoints. Figures on screen are
 computed from the response in front of you, so they will differ from the ones
 recorded here.
@@ -7,7 +9,9 @@ recorded here.
 ## Before you start
 
 ```bash
-npm install
+npm ci
+npm test
+npm run lint
 npm run build
 npm run start
 ```

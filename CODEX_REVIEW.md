@@ -1,5 +1,8 @@
 # Codex review of `claude/prescriptive-build`
 
+> Historical review record. The findings below were addressed by commit
+> `8a6c8f6`; the current release gate is documented in `README.md`.
+
 Reviewed: 2 September 2026  
 Reviewed tip: `4263c52`  
 Verdict: **NOT READY TO MERGE OR DEPLOY**
@@ -165,4 +168,3 @@ The next handoff must include:
 5. Correct desktop/mobile screenshot hashes and dimensions.
 6. An honest statement that Chrome MV3 end-to-end verification is still pending if it remains unobserved.
 7. Final line `NOT READY FOR REVIEW` until the unpacked Chrome flow is observed successfully on Neelanjana's machine.
-

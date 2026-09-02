@@ -2,6 +2,8 @@
 
 **Your size, taste and what truly suits you—working together on every fashion site.**
 
+Live demonstrator: **[fashion-passport.vercel.app](https://fashion-passport.vercel.app)**
+
 Fashion Passport is a portable personal relevance layer for fashion shopping. A shopper connects the Passport once; it can then filter and rerank compatible retailer products using hard constraints, explicit taste, learned feedback, and optional styling theory.
 
 The central rule is deliberately human: **personal preference always overrules colour-season or body-shape theory**.
@@ -48,22 +50,33 @@ On compatible Shopify retailer pages, the extension registers:
 
 Tool descriptions and JSON Schemas are defined in [`src/app/page.tsx`](src/app/page.tsx) and [`extension/page-tools.js`](extension/page-tools.js).
 
-## Run locally
+## Reproduce the demonstrator locally
 
-Requirements: Node.js 20+ and npm.
+Requirements: Git, Node.js 20+, npm and Chrome 152 or newer. No API keys,
+database, paid feed or `.env` file are required. Internet access is required
+because product results come from retailer-owned live endpoints.
 
 ```bash
-npm install
+git clone https://github.com/neelanjanabasu13/fashion-passport.git
+cd fashion-passport
+git checkout claude/prescriptive-build
+npm ci
+npm test
+npm run lint
+npm run build
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
 
-Validation:
+The test suite includes scoring regressions, preference learning and parity
+between the web and extension ranking engines. Run the complete release gate:
 
 ```bash
+npm test
 npm run lint
 npm run build
+node --check extension/fashion-engine.js
 node --check extension/content.js
 node --check extension/page-tools.js
 node --check extension/popup.js
@@ -79,6 +92,12 @@ node --check extension/popup.js
 6. Fashion Passport anonymously checks for the standard UCP tools. It renders nothing if the endpoint is absent.
 7. Select the Fashion Passport control and review exactly what will be shared. This is the single connection prompt; subsequent compatible stores and category changes do not ask again.
 8. The extension follows the retailer's official catalogue cursors in pages of up to 250, deduplicates the response, and opens an on-site ranked results panel. The panel distinguishes the top products shown, category-relevant products ranked and complete live catalogue products scanned; it never presents one API page as the retailer's total.
+
+To reproduce the portability proof, approve the Passport once on Nobody's
+Child, react **Less** to four products sharing a trait, use **Undo**, and then
+open Jigsaw in a new tab. The second retailer should use the same Passport and
+learned signals without another approval. The exact two-minute sequence and
+fallback retailers are in [`docs/DEMO.md`](docs/DEMO.md).
 
 Live verified retailers as of 2 September 2026 include Jigsaw, Lucy & Yak, Oh Polly, Never Fully Dressed, RIXO, KITRI, OMNES, Nobody's Child, House of Sunny, Motel Rocks, MESHKI, Nadine Merabi, Finisterre, Passenger, Beyond Nine, Albaray, Ro&Zo and Disturbia.
 
@@ -114,6 +133,19 @@ This ordering is intentional. The demo profile is Deep Winter but loves burnt or
 - Imperative WebMCP API (`document.modelContext.registerTool`)
 - Local-first browser storage
 - Vercel-hosted Next.js deployment with a stateless Shopify UCP route
+
+## Deploy your own copy
+
+After the release gate above passes:
+
+```bash
+npx vercel@latest deploy -y
+```
+
+That creates a preview deployment. To intentionally update a production
+deployment, use `npx vercel@latest deploy --prod -y`. The first CLI run asks
+you to sign in and links the local directory to a Vercel project. No environment
+variables are required for the current demonstrator.
 
 Supabase is not required for the prize demonstrator. It can later provide opt-in account and cross-device profile sync without changing the local-first default.
 

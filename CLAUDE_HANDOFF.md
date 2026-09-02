@@ -1,5 +1,9 @@
 # Claude handoff
 
+> Historical implementation handoff. Its listed P0/P1 findings were resolved
+> by commit `8a6c8f6`. Use `README.md` and `docs/DEMO.md` for current setup and
+> verification instructions.
+
 Branch: `claude/prescriptive-build`
 Reviewed tip: `bbf7f2b` (*Document blocking review findings*)
 Base: `codex/mvp` at `c491cd1`
