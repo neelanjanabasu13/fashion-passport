@@ -181,3 +181,19 @@ export const TAXONOMY_CATEGORY: Record<string, string> = {
 export function requestedCategory(query: string): string | null {
   return mapToCanonical("category", query);
 }
+
+/** Readable plurals for the live result header. */
+export const CATEGORY_PLURAL: Record<string, string> = {
+  Dress: "dresses",
+  Skirt: "skirts",
+  Top: "tops",
+  "Shirt/blouse": "shirts and blouses",
+  Trouser: "trousers",
+  Jean: "jeans",
+  "Jumpsuit/playsuit": "jumpsuits and playsuits",
+  Short: "shorts",
+  "Coat/jacket": "coats and jackets",
+  Knitwear: "knitwear",
+};
+
+export const pluralCategory = (category: string) => CATEGORY_PLURAL[category] ?? category.toLowerCase();

@@ -6,10 +6,10 @@ import { DressArt } from "@/components/dress-art";
 import { Icon } from "@/components/icons";
 import { BodyShapeVisual, ColourSignalVisual, PaletteVisual } from "@/components/profile-visuals";
 import { demoProfile, retailers } from "@/lib/data";
-import { analysisFit, rankProducts } from "@/lib/scoring";
+import { analysisFit, rankProducts, scoreLabel, tierCounts } from "@/lib/scoring";
 import { derivePreferences, emptyLearned, legacySignalsToPreferences, recordVote, traitKeysForProduct, undoVote } from "@/lib/learned";
 import { SEASONS, theoryFor as seasonTheory } from "@/lib/style-theory";
-import { FASHION_DIMENSIONS, VOCABULARY, type Dimension } from "@/lib/ontology";
+import { FASHION_DIMENSIONS, VOCABULARY, pluralCategory, requestedCategory, type Dimension } from "@/lib/ontology";
 import type { LearnedTaste, PreferenceGroup, PreferenceLevel } from "@/lib/types";
 import { inferColourSeason, theoryFor } from "@/lib/style-theory";
 import type { FashionProfile, Product, Retailer, ScoredProduct } from "@/lib/types";
@@ -23,32 +23,41 @@ const STORE_TASTE_VOTES = "fashion-passport:taste-votes";
 type View = "travel" | "shop" | "passport" | "taste" | "privacy";
 type Reaction = "up" | "down";
 const TASTE_TARGET = 20;
+/** A render batch for performance. Never a recommendation cap. */
+const RENDER_BATCH = 24;
+type TierView = "strong" | "worth" | "all" | "held";
 
 function retailerKind(retailer: Retailer) {
   return retailer.kind === "shopify" ? "Native Shopify UCP" : "Retailer catalogue";
 }
 
 function ProductCard({ item, reaction, onReact }: { item: ScoredProduct; reaction?: Reaction; onReact: (item: ScoredProduct, reaction: Reaction) => void }) {
-  const topReasons = item.reasons.filter((reason) => reason.kind !== "warning").slice(0, 3);
-  const warning = item.reasons.find((reason) => reason.kind === "warning");
+  const positives = item.reasons.filter((reason) => reason.kind !== "warning").slice(0, 3);
+  const held = item.state === "held";
+  // Labels are used sparingly: only a strong match, a soft conflict, or a hard rule.
+  const label = held ? "Held by rule" : item.state === "strong" ? "Strong match" : item.conflicts.length ? "With a note" : null;
   return (
-    <article className={`product-card ${item.blocked ? "blocked" : ""}`} data-product-id={item.id}>
+    <article className={`product-card state-${item.state}`} data-product-id={item.id}>
       <div className="product-visual">
         {item.imageUrl ? <Image className="real-product-image" src={item.imageUrl} alt={`${item.name} at ${item.brand}`} fill sizes="(max-width: 700px) 92vw, (max-width: 1000px) 45vw, 22vw" /> : <DressArt product={item} />}
-        {item.score > 0 && <div className={`match-badge ${item.score >= 90 ? "best" : ""}`}><strong>{item.score}%</strong><span>match</span></div>}
-        <div className="reaction-row" aria-label={`Give feedback on ${item.name}`}>
-          <button className={reaction === "down" ? "active" : ""} onClick={() => onReact(item, "down")} aria-label="Show me less like this"><Icon name="thumbsDown" /></button>
-          <button className={reaction === "up" ? "active positive" : ""} onClick={() => onReact(item, "up")} aria-label="Show me more like this"><Icon name="thumbsUp" /></button>
+        {label && <span className={`state-label state-${item.state}`}>{label}</span>}
+        {!held && item.evidenceConfidence !== "low" && <div className="match-badge"><strong>{item.matchScore}%</strong><span>match</span></div>}
+        <div className="reaction-row" aria-label={`Teach the Passport about ${item.name}`}>
+          <button className={reaction === "down" ? "active" : ""} onClick={() => onReact(item, "down")} aria-label={`Less like ${item.name}`} title="Less like this"><Icon name="thumbsDown" /></button>
+          <button className={reaction === "up" ? "active positive" : ""} onClick={() => onReact(item, "up")} aria-label={`More like ${item.name}`} title="More like this"><Icon name="thumbsUp" /></button>
         </div>
       </div>
       <div className="product-copy">
         <div className="brand-line"><span>{item.brand}</span><strong>£{item.price}</strong></div>
         <h3>{item.name}</h3>
+        {item.evidence.colour.value !== "Unknown" && <p className="variant-colour">{item.evidence.colour.value}{item.alternativeColours.length > 0 && <em> · also in {item.alternativeColours.slice(0, 3).join(", ").toLowerCase()}</em>}</p>}
+        {item.evidenceConfidence === "low" && <p className="low-confidence">{scoreLabel(item)}</p>}
         <ul className="reason-list">
-          {topReasons.map((reason) => <li key={reason.label}><Icon name="check" />{reason.label}</li>)}
-          {warning && <li className="warning"><span>!</span>{warning.label}</li>}
+          {positives.map((reason) => <li key={reason.label}><Icon name="check" />{reason.label}</li>)}
+          {item.conflicts.map((reason) => <li className="warning" key={reason.label}><span>!</span>{reason.label}</li>)}
+          {held && item.hardRules.map((rule) => <li className="hard-rule" key={rule.label}><span>✕</span>{rule.label}</li>)}
         </ul>
-        {item.productUrl ? <a className="view-item" href={item.productUrl} target="_blank" rel="noreferrer">View real item <Icon name="external" /></a> : <button className="view-item">View item <Icon name="arrow" /></button>}
+        {item.productUrl ? <a className="view-item" href={item.productUrl} target="_blank" rel="noreferrer">View at {item.brand} <Icon name="external" /></a> : <button className="view-item">View item <Icon name="arrow" /></button>}
       </div>
     </article>
   );
@@ -425,16 +434,18 @@ export default function Home() {
   const [showApproval, setShowApproval] = useState(false);
   const [learnedAvoid, setLearnedAvoid] = useState<string[]>([]);
   const [learnedTaste, setLearnedTaste] = useState<LearnedTaste>(emptyLearned());
+  const [tier, setTier] = useState<TierView>("strong");
+  const [shown, setShown] = useState(RENDER_BATCH);
+  const [lastLearn, setLastLearn] = useState<{ keys: string[]; reaction: Reaction; label: string; moved: number } | null>(null);
   const [reactions, setReactions] = useState<Record<string, Reaction>>({});
   const [passportOn, setPassportOn] = useState(true);
-  const [showBlocked, setShowBlocked] = useState(false);
   const [query, setQuery] = useState("Find me a colourful work dress under £100");
   const [notice, setNotice] = useState("");
   const [liveProducts, setLiveProducts] = useState<Product[]>([]);
   const [catalogueState, setCatalogueState] = useState<"idle" | "loading" | "connected" | "error">("idle");
   const [catalogueError, setCatalogueError] = useState("");
   const [liveAt, setLiveAt] = useState("");
-  const [searchStats, setSearchStats] = useState({ storesQueried: 0, storesResponding: 0, candidatesConsidered: 0 });
+  const [searchStats, setSearchStats] = useState({ storesQueried: 0, storesResponding: 0, catalogueScanned: 0, moreAvailable: false });
   const stateRef = useRef({ retailerId, connected, learnedAvoid, learnedTaste, liveProducts, profile });
 
   useEffect(() => {
@@ -473,23 +484,39 @@ export default function Home() {
 
   const retailer = retailers.find((item) => item.id === retailerId);
   const ranked = useMemo(() => rankProducts(retailerId === "all" ? liveProducts : liveProducts.filter((product) => product.retailerId === retailerId), { profile, query, learned: [...derivePreferences(learnedTaste), ...legacySignalsToPreferences(learnedAvoid)] }), [liveProducts, retailerId, learnedAvoid, learnedTaste, profile, query]);
-  const visible = (passportOn && connected ? ranked.filter((item) => showBlocked || !item.blocked) : ranked.map((item) => ({ ...item, score: 0 }))).slice(0, 30);
-  const hiddenCount = passportOn && connected ? ranked.filter((item) => item.blocked).length : 0;
+  const applied = passportOn && connected;
+  const counts = useMemo(() => tierCounts(searchStats.catalogueScanned, ranked, query), [ranked, query, searchStats.catalogueScanned]);
+  // Default to Strong matches whenever at least one exists, without writing
+  // state from an effect.
+  const activeTier: TierView = tier === "strong" && counts.strong === 0 && counts.worth > 0 ? "worth" : tier;
+  const tierItems = useMemo(() => {
+    if (!applied) return ranked;
+    if (activeTier === "held") return ranked.filter((item) => item.state === "held");
+    if (activeTier === "all") return ranked.filter((item) => item.state !== "held");
+    return ranked.filter((item) => item.state === activeTier);
+  }, [ranked, activeTier, applied]);
+  // A render batch only. Every qualifying product stays reachable below.
+  const visible = tierItems.slice(0, shown);
+  const remaining = Math.max(0, tierItems.length - visible.length);
+  const requested = requestedCategory(query);
+
+
 
   const loadCatalogue = async (requestText: string) => {
-    setCatalogueState("loading"); setCatalogueError(""); setLiveProducts([]); setShowBlocked(false);
+    setShown(RENDER_BATCH);
+    setCatalogueState("loading"); setCatalogueError(""); setLiveProducts([]); 
     try {
       const response = await fetch("/api/shopify/search-all", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: requestText, sharePassport: true, profile }),
       });
-      const payload = await response.json() as { error?: string; products?: Product[]; liveAt?: string; storesQueried?: number; storesResponding?: number; candidatesConsidered?: number };
+      const payload = await response.json() as { error?: string; products?: Product[]; liveAt?: string; storesQueried?: number; storesResponding?: number; catalogueScanned?: number; moreAvailable?: boolean };
       if (!response.ok) throw new Error(payload.error || "The Shopify network did not respond");
       const nextProducts = payload.products || [];
       setLiveProducts(nextProducts); setRetailerId("all"); setLiveAt(payload.liveAt || new Date().toISOString()); setCatalogueState("connected");
-      setSearchStats({ storesQueried: payload.storesQueried || retailers.length, storesResponding: payload.storesResponding || 0, candidatesConsidered: payload.candidatesConsidered || nextProducts.length });
-      setNotice(`${nextProducts.length} category-correct products considered across ${payload.storesResponding || 0} stores`); setTimeout(() => setNotice(""), 2600);
+      setSearchStats({ storesQueried: payload.storesQueried || 0, storesResponding: payload.storesResponding || 0, catalogueScanned: payload.catalogueScanned || 0, moreAvailable: Boolean(payload.moreAvailable) });
+      setNotice(`${(payload.catalogueScanned || 0).toLocaleString("en-GB")} catalogue products scanned across ${payload.storesResponding || 0} stores`); setTimeout(() => setNotice(""), 2600);
       return nextProducts;
     } catch (error) {
       setCatalogueState("error"); setCatalogueError(error instanceof Error ? error.message : "Live Shopify search failed");
@@ -585,7 +612,7 @@ export default function Home() {
     return () => controller.abort();
   }, []);
 
-  const selectRetailer = (id: string) => { setRetailerId(id); setShowBlocked(false); };
+  const selectRetailer = (id: string) => { setRetailerId(id); setShown(RENDER_BATCH); };
   const connectPassport = () => {
     setConnected(true); localStorage.setItem(STORE_CONNECTED, "true");
     document.dispatchEvent(new Event("fashion-passport:connection-changed"));
@@ -593,11 +620,43 @@ export default function Home() {
   };
   const reactTo = (item: ScoredProduct, reaction: Reaction) => {
     setReactions((current) => ({ ...current, [item.id]: reaction }));
-    if (reaction === "down") {
-      const next = Array.from(new Set([...learnedAvoid, item.neckline])); setLearnedAvoid(next); localStorage.setItem(STORE_SIGNALS, JSON.stringify(next));
-      setNotice(`Got it — less ${item.neckline.toLowerCase()} necklines`);
-    } else setNotice("Saved — more like this");
-    setTimeout(() => setNotice(""), 2200);
+    const keys = traitKeysForProduct(item.evidence as unknown as Record<string, { value: string }>);
+    if (keys.length === 0) return;
+
+    const before = rankProducts(ranked, { profile, query, learned: derivePreferences(learnedTaste) }).map((entry) => entry.id);
+    const updated = recordVote(learnedTaste, keys, reaction);
+    const after = rankProducts(ranked, { profile, query, learned: derivePreferences(updated) }).map((entry) => entry.id);
+    const moved = after.reduce((total, id, index) => (before[index] === id ? total : total + 1), 0);
+
+    localStorage.setItem(STORE_TASTE_VOTES, JSON.stringify(updated));
+    setLearnedTaste(updated);
+
+    // Name a trait the signal can actually move. A trait the shopper has
+    // stated explicitly is never affected by learning, so naming it would be
+    // misleading.
+    const groupFor: Partial<Record<Dimension, keyof FashionProfile>> = {
+      colour: "colours", silhouette: "silhouettes", neckline: "necklines",
+      sleeve: "sleeves", length: "lengths", pattern: "patterns", material: "materials",
+    };
+    const movable = FASHION_DIMENSIONS.find((dimension) => {
+      const value = (item.evidence as Record<string, { value: string }>)[dimension]?.value;
+      if (!value || value === "Unknown") return false;
+      const field = groupFor[dimension];
+      if (!field) return false;
+      const group = profile[field] as PreferenceGroup;
+      return ![...group.love, ...group.avoid, ...group.never].some((entry) => entry.toLowerCase() === value.toLowerCase());
+    });
+    const named = movable ? (item.evidence as Record<string, { value: string }>)[movable].value : null;
+    const label = `${reaction === "up" ? "more" : "less"} ${(named || "like this").toLowerCase()}`;
+    setLastLearn({ keys, reaction, label, moved });
+  };
+
+  const undoLastLearn = () => {
+    if (!lastLearn) return;
+    const reverted = undoVote(learnedTaste, lastLearn.keys, lastLearn.reaction);
+    localStorage.setItem(STORE_TASTE_VOTES, JSON.stringify(reverted));
+    setLearnedTaste(reverted);
+    setLastLearn(null);
   };
   const revoke = () => { setConnected(false); localStorage.removeItem(STORE_CONNECTED); document.dispatchEvent(new Event("fashion-passport:connection-changed")); setLiveProducts([]); setCatalogueState("idle"); };
   const finishOnboarding = () => { localStorage.setItem(STORE_ONBOARDED, "true"); try { setLearnedAvoid(JSON.parse(localStorage.getItem(STORE_SIGNALS) || "[]")); } catch { /* Keep the stable profile. */ } setView("travel"); };
@@ -621,10 +680,37 @@ export default function Home() {
           <div className="store-heading"><div><div className="store-label"><span className="retailer-avatar">{retailer ? retailer.name.slice(0, 1) : "18"}</span><p>{retailer ? retailerKind(retailer) : "Cross-store Shopify UCP"}<strong>{retailer ? `${retailer.name} · filtered results` : `${retailers.length} verified fashion stores · one search`}</strong></p></div><div className={`native-status ${catalogueState}`}><i></i>{catalogueState === "connected" ? `${searchStats.storesResponding} live endpoints responded` : catalogueState === "loading" ? "Calling live endpoints" : catalogueState === "error" ? "Network needs retry" : `${retailers.length} official endpoints verified`}</div></div><div className={`passport-switch ${passportOn && connected ? "on" : ""}`}><div><Icon name="passport"/><span>Fashion Passport<strong>{connected ? (passportOn ? "Connected once" : "Paused") : "Not connected"}</strong></span></div>{connected ? <button role="switch" aria-checked={passportOn} onClick={() => setPassportOn(!passportOn)}><i/></button> : <button className="apply-small" onClick={() => setShowApproval(true)}>Connect once</button>}</div></div>
           {passportOn && connected ? <div className="applied-banner"><Icon name="check"/><span><strong>Passport connected once.</strong> It remains applied across shops, categories, queries and tab changes.</span><button onClick={() => setView("passport")}>See profile</button></div> : <div className="permission-banner"><Icon name="lock"/><span><strong>Your Passport is private.</strong> Connect it once for compatible Shopify fashion stores.</span><button onClick={() => setShowApproval(true)}>Connect once <Icon name="arrow"/></button></div>}
           {ranked.length ? <>
-            <div className="search-evidence"><strong>{searchStats.candidatesConsidered}</strong><span>category-correct products considered</span><strong>{searchStats.storesResponding}</strong><span>live stores responded</span><strong>{visible.length}</strong><span>best matches shown</span></div>
-            <div className="catalogue-toolbar"><p><strong>{visible.length}</strong> top matches for “{query}” {retailer ? `at ${retailer.name}` : `across ${searchStats.storesResponding} stores`}</p><div><span className="snapshot-date">Live via UCP · {liveAt ? new Date(liveAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "now"}</span><select aria-label="Sort products"><option>Best match</option><option>Price low to high</option></select></div></div>
+            <div className="result-header">
+              <p className="result-scanned"><strong>{counts.catalogueScanned.toLocaleString("en-GB")}</strong> catalogue products scanned{searchStats.moreAvailable ? " so far" : ""}{searchStats.storesResponding > 1 ? ` across ${searchStats.storesResponding} live stores` : ""}</p>
+              {requested && <p className="result-category"><strong>{counts.categoryCorrect.toLocaleString("en-GB")}</strong> {counts.categoryCorrect === 1 ? requested.toLowerCase() : pluralCategory(requested)} found</p>}
+              <p className="result-tiers"><strong>{counts.strong}</strong> strong {counts.strong === 1 ? "match" : "matches"} · <strong>{counts.worth}</strong> worth a look · <strong>{counts.held}</strong> held by your rules</p>
+            </div>
+
+            {applied && <nav className="tier-nav" aria-label="Result tiers">
+              {([["strong", "Strong matches", counts.strong], ["worth", "Worth a look", counts.worth], ["all", "All products", counts.strong + counts.worth + counts.other], ["held", "Held by rules", counts.held]] as [TierView, string, number][]) .map(([key, label, count]) => (
+                <button key={key} className={activeTier === key ? "active" : ""} aria-current={activeTier === key ? "true" : undefined} onClick={() => { setTier(key); setShown(RENDER_BATCH); }}>
+                  {label} <span>{count}</span>
+                </button>
+              ))}
+            </nav>}
+
+            {lastLearn && <div className="learned-toast" role="status">
+              <Icon name="sparkle" />
+              <span><strong>Passport learned: {lastLearn.label}.</strong>{lastLearn.moved > 0 ? ` ${lastLearn.moved} ${lastLearn.moved === 1 ? "product" : "products"} moved.` : " It takes repeated evidence to change the order."}</span>
+              <button onClick={undoLastLearn}>Undo</button>
+            </div>}
+
+            <div className="catalogue-toolbar">
+              <p>Showing <strong>{visible.length}</strong> of <strong>{tierItems.length}</strong> in {activeTier === "all" ? "all products" : activeTier === "held" ? "held by rules" : activeTier === "strong" ? "strong matches" : "worth a look"} for &ldquo;{query}&rdquo;{retailer ? ` at ${retailer.name}` : ""}</p>
+              <div><span className="snapshot-date">Live via UCP · {liveAt ? new Date(liveAt).toLocaleTimeString("en-GB") : "just now"}</span></div>
+            </div>
+
             <div className="product-grid">{visible.map((item) => <ProductCard key={item.id} item={item} reaction={reactions[item.id]} onReact={reactTo}/>)}</div>
-            {hiddenCount > 0 && !showBlocked && <button className="hidden-products" onClick={() => setShowBlocked(true)}><Icon name="shield"/><span><strong>{hiddenCount} unsuitable {hiddenCount === 1 ? "item" : "items"} hidden</strong>Wrong size, over budget or avoided material</span><span>Show anyway</span></button>}
+
+            {remaining > 0 && <button className="load-more" onClick={() => setShown(shown + RENDER_BATCH)}>
+              Load {Math.min(RENDER_BATCH, remaining)} more <span>{remaining} still to see in this tier</span>
+            </button>}
+            {remaining === 0 && tierItems.length > RENDER_BATCH && <p className="tier-complete">That is every product in this tier.</p>}
           </> : <section className={`live-site-only ${catalogueState === "error" ? "has-error" : ""}`}><div className="live-site-icon"><Icon name={catalogueState === "error" ? "close" : "external"} /></div><p className="eyebrow">{catalogueState === "error" ? "Live connection needs another try" : "Retailer-owned products only"}</p><h2>{catalogueState === "error" ? catalogueError : `Search ${retailers.length} live fashion stores together.`}</h2><p>{catalogueState === "error" ? "No cached or invented products have replaced the retailer response." : "Connect once. Fashion Passport calls every verified retailer-owned Shopify endpoint, enforces the requested garment category, and shows the best 30—not a sea of irrelevant stock."}</p>{connected ? <button className="primary-button" onClick={() => void loadCatalogue(query)}>Search live stores <Icon name="arrow" /></button> : <button className="primary-button" onClick={() => setShowApproval(true)}>Connect once <Icon name="arrow" /></button>}<small>For the on-site experience, load the extension and open any compatible Shopify store.</small></section>}
         </section>
       </main>}

@@ -11,7 +11,11 @@
   let profile = {
     size: "UK 10", heightCm: 163, budget: 100, season: "Deep Winter", shape: "Inverted triangle",
     love: ["red", "ruby", "burgundy", "pink", "jewel", "navy", "emerald", "camel", "orange", "terracotta", "a-line", "fit and flare", "flowy", "square neck", "boat neck", "scoop neck", "midi", "silk", "linen", "cotton", "chiffon", "ditsy", "gingham", "plaid"],
-    avoid: ["polyester", "boxy", "structured", "cowl", "cap sleeve", "olive", "grey", "gray", "taupe", "animal print", "leopard", "snake print"]
+    avoid: ["polyester", "boxy", "structured", "cowl", "cap sleeve", "olive", "grey", "gray", "taupe", "animal print", "leopard", "snake print"],
+    // Only `never` can hold a product. An ordinary avoid ranks it lower and
+    // leaves it visible. Mirrors src/lib/scoring.ts, which is the source of truth.
+    never: [],
+    budgetMode: "usual"
   };
 
   let retailerName = host;
@@ -92,6 +96,20 @@
     return !category || category.p.some((term) => new RegExp(`\\b${term}s?\\b`, "i").test(title));
   };
 
+  const categoryLabel = (query) => {
+    const map = [["dress", "dresses"], ["skirt", "skirts"], ["top", "tops"], ["trouser", "trousers"], ["jean", "jeans"], ["jumpsuit", "jumpsuits"], ["short", "shorts"], ["coat", "coats and jackets"], ["jacket", "coats and jackets"], ["knit", "knitwear"]];
+    const hit = map.find(([term]) => new RegExp(`\\b${term}`, "i").test(String(query || "")));
+    return hit ? hit[1] : "products";
+  };
+
+  const hardPriceCap = (query) => {
+    const match = String(query || "").match(/(?:under|below|less than|max(?:imum)?|up to)\s*£?\s*(\d+(?:\.\d{1,2})?)/i);
+    return match ? Number(match[1]) : null;
+  };
+  let currentQuery = "";
+  let panelTier = "strong";
+  let panelShown = 24;
+
   const analyse = (item) => {
     const text = productText(item);
     const learnedLikes = learnedSignals.filter((term) => term.startsWith("love:")).map((term) => term.slice(5).toLowerCase());
@@ -104,9 +122,19 @@
     const hasSizeData = sizeOptions.length > 0;
     const hasSize = sizeOptions.some((size) => /(^|\D)10(\D|$)/.test(String(size)));
     const overBudget = price > profile.budget;
-    const blocked = avoids.includes("polyester") || overBudget || (hasSizeData && !hasSize);
+    const nevers = (profile.never || []).filter((term) => hasTerm(text, term));
+    const cap = hardPriceCap(currentQuery);
+    // The five hard rules. An ordinary avoid is never one of them.
+    const hardRules = [];
+    if (hasSizeData && !hasSize) hardRules.push(`${profile.size} is sold out`);
+    if (cap !== null && price > cap) hardRules.push(`Over your £${cap} limit for this search`);
+    if (nevers.length) hardRules.push(`${nevers[0]} is on your never list`);
+    if (profile.budgetMode === "strict" && overBudget) hardRules.push(`Over your £${profile.budget} budget`);
+    const blocked = hardRules.length > 0;
     const uniqueLoves = [...new Set(loves)].slice(0, 3);
-    const score = Math.max(18, Math.min(97, 58 + uniqueLoves.length * 9 + Math.min(theoryHits.length, 2) * 5 - avoids.length * 12 - (overBudget ? 22 : 0) - (hasSizeData && !hasSize ? 30 : 0)));
+    // Base 40, so a product with no usable attributes stays in `other`.
+    const score = Math.max(1, Math.min(99, 40 + uniqueLoves.length * 9 + Math.min(theoryHits.length, 2) * 5 - avoids.length * 8 - (overBudget && profile.budgetMode !== "strict" ? 8 : 0) + (hasSize ? 3 : 0)));
+    const state = blocked ? "held" : score >= 70 ? "strong" : score >= 50 ? "worth" : "other";
     const reasons = [];
     if (hasSize) reasons.push("UK 10 available");
     if (uniqueLoves[0]) reasons.push(`Matches your ${uniqueLoves[0]} preference`);
@@ -114,8 +142,8 @@
     if (theoryHits[0]) reasons.push(`Likely to suit your ${profile.season} / ${profile.shape} profile`);
     if (!overBudget) reasons.push(`Within £${profile.budget} budget`);
     if (overBudget) reasons.push(`Over £${profile.budget} budget`);
-    if (avoids[0]) reasons.push(`Contains avoided ${avoids[0]}`);
-    return { item, text, price, score, reasons, blocked, image: item.media?.find((media) => media.type === "image")?.url || item.variants?.flatMap((variant) => variant.media || []).find((media) => media.type === "image")?.url || "" };
+
+    return { item, text, price, score, state, hardRules, conflicts: [...new Set(avoids)], reasons, blocked, image: item.media?.find((media) => media.type === "image")?.url || item.variants?.flatMap((variant) => variant.media || []).find((media) => media.type === "image")?.url || "" };
   };
 
   const renderPill = (status = "") => {
@@ -138,16 +166,33 @@
   };
 
   const renderPanel = (query, ranked, scan) => {
+    currentQuery = query;
     panel?.remove(); panel = document.createElement("aside"); panel.id = "fashion-passport-results";
-    const visible = ranked.filter((result) => !result.blocked).slice(0, 8);
+    const counts = {
+      strong: ranked.filter((r) => r.state === "strong").length,
+      worth: ranked.filter((r) => r.state === "worth").length,
+      other: ranked.filter((r) => r.state === "other").length,
+      held: ranked.filter((r) => r.state === "held").length,
+    };
+    if (panelTier === "strong" && counts.strong === 0 && counts.worth > 0) panelTier = "worth";
+    const inTier = panelTier === "held" ? ranked.filter((r) => r.state === "held")
+      : panelTier === "all" ? ranked.filter((r) => r.state !== "held")
+      : ranked.filter((r) => r.state === panelTier);
+    // A render batch for performance, never a recommendation cap.
+    const visible = inTier.slice(0, panelShown);
+    const remaining = inTier.length - visible.length;
     const cards = visible.map((result) => {
       const url = safeUrl(result.item.url); const image = safeUrl(result.image);
-      return `<article class="fp-result-card"><a href="${escapeHtml(url)}" target="_blank" rel="noreferrer">${image ? `<img src="${escapeHtml(image)}" alt="">` : ""}<span class="fp-score">${result.score}%</span><div><small>${escapeHtml(retailerName)}</small><h3>${escapeHtml(result.item.title)}</h3><strong>£${result.price.toFixed(2)}</strong><ul>${result.reasons.slice(0, 3).map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul></div></a><div class="fp-feedback"><button data-signal="down" data-trait="${escapeHtml(result.text.includes("cowl") ? "cowl" : result.text.includes("polyester") ? "polyester" : "style")}" aria-label="Show less like this">↓</button><button data-signal="up" aria-label="Show more like this">↑</button></div></article>`;
+      return `<article class="fp-result-card"><a href="${escapeHtml(url)}" target="_blank" rel="noreferrer">${image ? `<img src="${escapeHtml(image)}" alt="">` : ""}${result.state === "held" ? "" : `<span class="fp-score">${result.score}%</span>`}<div><small>${escapeHtml(retailerName)}</small><h3>${escapeHtml(result.item.title)}</h3><strong>£${result.price.toFixed(2)}</strong><ul>${result.reasons.slice(0, 3).map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}${result.conflicts.slice(0, 2).map((c) => `<li class="fp-conflict">${escapeHtml(c)}</li>`).join("")}${result.hardRules.map((r) => `<li class="fp-hard">${escapeHtml(r)}</li>`).join("")}</ul></div></a><div class="fp-feedback"><button data-signal="down" data-traits="${escapeHtml([...new Set([...result.reasons.join(" ").match(/[a-z-]{4,}/gi) || []])].slice(0, 0).join(","))}" data-title="${escapeHtml(result.item.title)}" aria-label="Show less like this">↓</button><button data-signal="up" aria-label="Show more like this">↑</button></div></article>`;
     }).join("");
     const scannedLabel = scan.complete ? String(scan.scanned) : `at least ${scan.scanned}`;
-    panel.innerHTML = `<header><div><p>Fashion Passport</p><h2>${escapeHtml(retailerName)}</h2><span><i></i> Live Shopify UCP</span></div><button class="fp-panel-close" aria-label="Close">×</button></header><form><input value="${escapeHtml(query)}" aria-label="Search this retailer"><button>Rank</button></form><div class="fp-result-summary"><strong>${visible.length}</strong> shown from ${ranked.length} relevant products · ${scannedLabel} live catalogue products scanned · ${ranked.filter((result) => result.blocked).length} held back</div><div class="fp-results-grid">${cards || `<p class="fp-empty">No suitable live matches returned. Try a broader search.</p>`}</div><footer>${scan.pages} catalogue ${scan.pages === 1 ? "page" : "pages"} read · retailer-owned products · personal ranking</footer>`;
+    panel.innerHTML = `<header><div><p>Fashion Passport</p><h2>${escapeHtml(retailerName)}</h2><span><i></i> Live Shopify UCP</span></div><button class="fp-panel-close" aria-label="Close">×</button></header><form><input value="${escapeHtml(query)}" aria-label="Search this retailer"><button>Rank</button></form><div class="fp-result-summary"><strong>${scannedLabel}</strong> catalogue products scanned · <strong>${ranked.length}</strong> ${escapeHtml(categoryLabel(query))} found<br>${counts.strong} strong · ${counts.worth} worth a look · ${counts.held} held by your rules</div><nav class="fp-tiers">${[["strong", "Strong", counts.strong], ["worth", "Worth a look", counts.worth], ["all", "All", counts.strong + counts.worth + counts.other], ["held", "Held", counts.held]].map(([key, label, count]) => `<button data-tier="${key}" class="${panelTier === key ? "is-on" : ""}">${label} <i>${count}</i></button>`).join("")}</nav><div class="fp-results-grid">${cards || `<p class="fp-empty">No suitable live matches returned. Try a broader search.</p>`}</div>${remaining > 0 ? `<button class="fp-load-more">Load ${Math.min(24, remaining)} more · ${remaining} still to see</button>` : ""}<footer>${scan.pages} catalogue ${scan.pages === 1 ? "page" : "pages"} read · retailer-owned products · personal ranking</footer>`;
     document.documentElement.appendChild(panel);
     panel.querySelector(".fp-panel-close").addEventListener("click", togglePanel);
+    panel.querySelectorAll("[data-tier]").forEach((button) => button.addEventListener("click", () => {
+      panelTier = button.dataset.tier; panelShown = 24; renderPanel(query, ranked, scan);
+    }));
+    panel.querySelector(".fp-load-more")?.addEventListener("click", () => { panelShown += 24; renderPanel(query, ranked, scan); });
     panel.querySelector("form").addEventListener("submit", (event) => { event.preventDefault(); const value = panel.querySelector("input").value.trim(); if (value) searchCatalogue(value); });
     panel.querySelectorAll("[data-signal]").forEach((button) => button.addEventListener("click", async () => {
       if (button.dataset.signal === "down" && button.dataset.trait !== "style") learnedSignals = [...new Set([...learnedSignals, button.dataset.trait])];
@@ -183,6 +228,7 @@
   };
 
   const searchCatalogue = async (query) => {
+    currentQuery = query;
     if (!approved) return showApproval();
     renderPill("Calling native endpoint…");
     try {
