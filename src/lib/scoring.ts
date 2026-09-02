@@ -1,83 +1,208 @@
-import type { FashionProfile, Product, ScoredProduct, ScoreReason } from "./types";
+import type {
+  FashionProfile,
+  LearnedPreference,
+  Product,
+  ResultState,
+  ScoreReason,
+  ScoredProduct,
+  TierCounts,
+} from "./types";
+import { FASHION_DIMENSIONS, type Dimension, requestedCategory } from "./ontology";
+import { evidenceConfidenceFor, hardPriceCap, sizeConfirmedUnavailable } from "./extract";
+import { lookupPreference } from "./learned";
 import { theoryFit, theoryFor } from "./style-theory";
 
+/** EXECUTION_SPEC section 7. Explicit preference outranks theory and learning. */
+const LOVE_WEIGHT: Record<Dimension, number> = {
+  category: 0, colour: 12, silhouette: 10, neckline: 8, sleeve: 5, length: 6, material: 7, pattern: 5,
+};
+const AVOID_WEIGHT: Record<Dimension, number> = {
+  category: 0, colour: 12, silhouette: 10, neckline: 8, sleeve: 5, length: 6, material: 9, pattern: 6,
+};
+const THEORY_WEIGHT: Record<Dimension, number> = {
+  category: 0, colour: 5, silhouette: 5, neckline: 3, sleeve: 2, length: 2, material: 2, pattern: 0,
+};
+
+const PROFILE_GROUP: Record<Dimension, keyof FashionProfile | null> = {
+  category: null, colour: "colours", silhouette: "silhouettes", neckline: "necklines",
+  sleeve: "sleeves", length: "lengths", material: "materials", pattern: "patterns",
+};
+
+const THEORY_GROUP: Record<Dimension, keyof ReturnType<typeof theoryFor> | null> = {
+  category: null, colour: "colours", silhouette: "silhouettes", neckline: "necklines",
+  sleeve: "sleeves", length: "lengths", material: "materials", pattern: null,
+};
+
 const normalise = (value: string) => value.trim().toLowerCase();
-const includes = (values: string[], value: string) => values.map(normalise).includes(normalise(value));
+const listHas = (values: string[] | undefined, value: string) =>
+  value !== "Unknown" && (values ?? []).some((entry) => normalise(entry) === normalise(value));
 
-export function scoreProduct(product: Product, profile: FashionProfile, learnedAvoid: string[] = []): ScoredProduct {
-  let score = 42;
+export type ScoreContext = {
+  profile: FashionProfile;
+  /** The shopper's own query, used only for a hard price cap and category intent. */
+  query?: string;
+  learned?: LearnedPreference[];
+};
+
+export function scoreProduct(product: Product, context: ScoreContext): ScoredProduct {
+  const { profile, query = "", learned = [] } = context;
+  const evidence = product.evidence;
   const reasons: ScoreReason[] = [];
-  const positive = (label: string, weight: number, kind: ScoreReason["kind"] = "positive") => {
+  const conflicts: ScoreReason[] = [];
+  const hardRules: ScoreReason[] = [];
+
+  // Base 40. A product with no usable attributes therefore stays in `other`;
+  // missing information must never promote it into `worth`.
+  let score = 40;
+  const add = (label: string, weight: number, kind: ScoreReason["kind"]) => {
     score += weight;
-    reasons.push({ label, weight, kind });
-  };
-  const warning = (label: string, weight: number) => {
-    score -= weight;
-    reasons.push({ label, weight: -weight, kind: "warning" });
+    (weight >= 0 ? reasons : conflicts).push({ label, weight, kind });
   };
 
-  const hardBlocks: string[] = [];
-  if (product.sizes.length > 0 && !product.sizes.includes(profile.size)) hardBlocks.push(`${profile.size} unavailable`);
-  if (product.price > profile.budget) hardBlocks.push(`Over £${profile.budget} budget`);
-  if (product.material !== "Not stated" && includes(profile.materials.avoid, product.material)) hardBlocks.push(`${product.material} is on your avoid list`);
-  if (product.colour !== "Not stated" && includes(profile.colours.avoid, product.colour)) hardBlocks.push(`${product.colour} is on your avoid list`);
-  if (product.silhouette !== "Not stated" && includes(profile.silhouettes.avoid, product.silhouette)) hardBlocks.push(`${product.silhouette} is on your avoid list`);
-  if (product.neckline !== "Not stated" && includes(profile.necklines.avoid, product.neckline)) hardBlocks.push(`${product.neckline} neckline is on your avoid list`);
-  if (product.sleeve !== "Not stated" && includes(profile.sleeves.avoid, product.sleeve)) hardBlocks.push(`${product.sleeve} sleeves are on your avoid list`);
-  if (product.pattern !== "Not stated" && includes(profile.patterns.avoid, product.pattern)) hardBlocks.push(`${product.pattern} is on your avoid list`);
+  // ---- Stage 2: hard rules. Only these five can hold a product. ----
+  const wantedCategory = requestedCategory(query);
+  if (wantedCategory && evidence.category.value !== "Unknown" && evidence.category.value !== wantedCategory) {
+    hardRules.push({ label: `Not a ${wantedCategory.toLowerCase()}`, weight: 0, kind: "hard" });
+  }
+  const cap = hardPriceCap(query);
+  if (cap !== null && product.price > cap) {
+    hardRules.push({ label: `Over your £${cap} limit for this search`, weight: 0, kind: "hard" });
+  }
+  if (sizeConfirmedUnavailable(product.availableSizes, profile.size)) {
+    hardRules.push({ label: `${profile.size} is sold out`, weight: 0, kind: "hard" });
+  }
+  for (const dimension of FASHION_DIMENSIONS) {
+    const group = PROFILE_GROUP[dimension];
+    const value = evidence[dimension].value;
+    if (group && listHas((profile[group] as { never?: string[] })?.never, value)) {
+      hardRules.push({ label: `${value} is on your never list`, weight: 0, kind: "hard" });
+    }
+  }
+  if (profile.budgetMode === "strict" && product.price > profile.budget) {
+    hardRules.push({ label: `Over your £${profile.budget} budget`, weight: 0, kind: "hard" });
+  }
 
+  // ---- Stage 3: match score. ----
   const theory = theoryFor(profile.colourSeason, profile.bodyShape);
 
-  // Explicit taste is deliberately stronger than the guidance layer.
-  if (includes(profile.colours.love, product.colour)) positive(`${product.colour} is a colour you love`, 16);
-  else if (includes(profile.colours.avoid, product.colour)) warning(`${product.colour} is on your avoid list`, 16);
-  if (!includes(profile.colours.avoid, product.colour) && includes(theory.colours, product.colour)) positive(`Likely to suit ${profile.colourSeason} colouring`, 6, "theory");
+  for (const dimension of FASHION_DIMENSIONS) {
+    const value = evidence[dimension].value;
+    if (value === "Unknown") continue; // unknown contributes nothing, in either direction
+    const group = PROFILE_GROUP[dimension];
+    const preferences = group ? (profile[group] as { love?: string[]; avoid?: string[] }) : undefined;
 
-  if (includes(profile.silhouettes.love, product.silhouette)) positive(`${product.silhouette} silhouette`, 10);
-  else if (includes(profile.silhouettes.avoid, product.silhouette)) warning(`${product.silhouette} is not your style`, 12);
+    const loved = listHas(preferences?.love, value);
+    const avoided = listHas(preferences?.avoid, value);
 
-  if (includes(profile.necklines.love, product.neckline)) positive(`${product.neckline} neckline`, 8);
-  else if (includes(profile.necklines.avoid, product.neckline)) warning(`${product.neckline} neckline`, 12);
+    if (loved) add(`${value} is one you love`, LOVE_WEIGHT[dimension], "positive");
+    else if (avoided) add(`${value}`, -AVOID_WEIGHT[dimension], "warning");
 
-  if (includes(profile.sleeves.love, product.sleeve)) positive(`${product.sleeve} sleeves`, 5);
-  else if (includes(profile.sleeves.avoid, product.sleeve)) warning(`${product.sleeve} sleeves`, 7);
+    // Theory applies only when the attribute is not explicitly avoided.
+    const theoryKey = THEORY_GROUP[dimension];
+    if (!avoided && theoryKey && listHas(theory[theoryKey], value)) {
+      add(`${value} suits your ${dimension === "colour" ? profile.colourSeason : profile.bodyShape.toLowerCase()}`,
+        THEORY_WEIGHT[dimension], "theory");
+    }
 
-  if (includes(profile.patterns.love, product.pattern)) positive(`${product.pattern} pattern`, 5);
-  else if (includes(profile.patterns.avoid, product.pattern)) warning(product.pattern === "Large print" ? "Large-scale print" : product.pattern === "Animal" ? "Animal print" : product.pattern, 8);
+    // Learned signals never outrank an explicit preference.
+    const preference = lookupPreference(learned, dimension, value);
+    if (preference && !loved && !avoided) {
+      const weight = Math.round(4 * preference.confidence * (preference.direction === "positive" ? 1 : -1));
+      if (weight !== 0) {
+        add(preference.direction === "positive" ? `More ${value.toLowerCase()} after your feedback`
+          : `Less ${value.toLowerCase()} after your feedback`, weight, "learned");
+      }
+    }
+  }
 
-  if (includes(profile.materials.love, product.material)) positive(`${product.material}`, 7);
-  if (includes(profile.lengths.love, product.length)) positive(`${product.length} length`, 6);
+  // Utility evidence.
+  if (product.availableSizes.length > 0 && !sizeConfirmedUnavailable(product.availableSizes, profile.size)) {
+    add(`${profile.size} in stock`, 3, "positive");
+  }
+  if (cap !== null && product.price <= cap) add(`Under your £${cap} limit`, 2, "positive");
+  if (profile.budgetMode !== "strict" && product.price > profile.budget) {
+    add(`Over your usual £${profile.budget}`, -8, "warning");
+  }
 
-  if (includes(theory.silhouettes, product.silhouette)) positive(`Likely to work with your ${profile.bodyShape.toLowerCase()} shape`, 7, "theory");
-  if (includes(theory.necklines, product.neckline)) positive(`${product.neckline} is suggested for your proportions`, 4, "theory");
-  if (includes(theory.sleeves, product.sleeve)) positive(`${product.sleeve} sleeves suit the guidance layer`, 3, "theory");
-  if (includes(theory.lengths, product.length)) positive(`${product.length} length suits the guidance layer`, 3, "theory");
-  if (includes(theory.materials, product.material)) positive(`${product.material} supports the suggested drape or structure`, 3, "theory");
+  const matchScore = Math.max(1, Math.min(99, Math.round(score)));
+  const evidenceConfidence = evidenceConfidenceFor(evidence);
+  const state: ResultState = hardRules.length > 0 ? "held" : matchScore >= 70 ? "strong" : matchScore >= 50 ? "worth" : "other";
 
-  const learnedLikes = learnedAvoid.filter((trait) => trait.startsWith("love:")).map((trait) => trait.slice(5));
-  const learnedDislikes = learnedAvoid.filter((trait) => trait.startsWith("avoid:")).map((trait) => trait.slice(6)).concat(learnedAvoid.filter((trait) => !trait.includes(":")));
-  const learnedLikeHits = learnedLikes.filter((trait) =>
-    [product.colour, product.silhouette, product.neckline, product.sleeve, product.pattern, product.material, product.length]
-      .map(normalise)
-      .includes(normalise(trait)),
-  );
-  if (learnedLikeHits.length) positive(`More ${learnedLikeHits[0]} after your feedback`, 6);
-
-  const learnedHits = learnedDislikes.filter((trait) =>
-    [product.colour, product.silhouette, product.neckline, product.sleeve, product.pattern, product.material, product.length]
-      .map(normalise)
-      .includes(normalise(trait)),
-  );
-  if (learnedHits.length) warning(`Less ${learnedHits[0]} after your feedback`, 9);
-
-  hardBlocks.forEach((reason) => warning(reason, 22));
-  return { ...product, score: Math.max(12, Math.min(96, Math.round(score))), reasons, blocked: hardBlocks.length > 0 };
+  return {
+    ...product,
+    score: matchScore,
+    matchScore,
+    evidenceConfidence,
+    state,
+    reasons,
+    conflicts,
+    hardRules,
+    blocked: state === "held",
+  };
 }
 
-export function rankProducts(items: Product[], profile: FashionProfile, learnedAvoid: string[] = []) {
-  return items.map((item) => scoreProduct(item, profile, learnedAvoid)).sort((a, b) => b.score - a.score);
+const explicitHits = (item: ScoredProduct) =>
+  item.reasons.filter((reason) => reason.kind === "positive").length + item.conflicts.filter((reason) => reason.kind === "warning").length;
+const theoryHits = (item: ScoredProduct) => item.reasons.filter((reason) => reason.kind === "theory").length;
+const CONFIDENCE_RANK = { high: 3, medium: 2, low: 1 } as const;
+
+/** Deterministic tie-break order from EXECUTION_SPEC section 7. */
+export function compareRanked(a: ScoredProduct, b: ScoredProduct, valueQuery = false) {
+  if (b.matchScore !== a.matchScore) return b.matchScore - a.matchScore;
+  if (explicitHits(b) !== explicitHits(a)) return explicitHits(b) - explicitHits(a);
+  const confidence = CONFIDENCE_RANK[b.evidenceConfidence] - CONFIDENCE_RANK[a.evidenceConfidence];
+  if (confidence !== 0) return confidence;
+  if (theoryHits(b) !== theoryHits(a)) return theoryHits(b) - theoryHits(a);
+  if (valueQuery && a.price !== b.price) return a.price - b.price;
+  return a.name.localeCompare(b.name);
+}
+
+const VALUE_QUERY = /\b(budget|cheap|affordable|value|under|less than|bargain|sale)\b/i;
+
+export function rankProducts(items: Product[], context: ScoreContext): ScoredProduct[] {
+  const valueQuery = VALUE_QUERY.test(context.query || "");
+  return items.map((item) => scoreProduct(item, context)).sort((a, b) => compareRanked(a, b, valueQuery));
+}
+
+/**
+ * Stage 1 category gate. Category-unknown products never enter a claimed
+ * category count; they remain reachable under All products.
+ */
+export function categoryCorrect(items: ScoredProduct[], query: string) {
+  const wanted = requestedCategory(query);
+  if (!wanted) return items;
+  return items.filter((item) => item.evidence.category.value === wanted);
+}
+
+export function tierCounts(scanned: number, ranked: ScoredProduct[], query: string): TierCounts {
+  const correct = categoryCorrect(ranked, query);
+  return {
+    catalogueScanned: scanned,
+    categoryCorrect: correct.length,
+    strong: ranked.filter((item) => item.state === "strong").length,
+    worth: ranked.filter((item) => item.state === "worth").length,
+    other: ranked.filter((item) => item.state === "other").length,
+    held: ranked.filter((item) => item.state === "held").length,
+  };
+}
+
+/** Low evidence hides the percentage but never the product. */
+export function scoreLabel(item: ScoredProduct) {
+  if (item.evidenceConfidence === "low") return "Possible match · limited product information";
+  return `${item.matchScore}%`;
 }
 
 export function analysisFit(product: Product, profile: FashionProfile) {
-  return theoryFit(product, profile.colourSeason, profile.bodyShape);
+  return theoryFit(
+    {
+      colour: product.colour,
+      silhouette: product.silhouette,
+      neckline: product.neckline,
+      sleeve: product.sleeve,
+      length: product.length,
+      material: product.material,
+    },
+    profile.colourSeason,
+    profile.bodyShape,
+  );
 }

@@ -7,6 +7,7 @@ import { Icon } from "@/components/icons";
 import { BodyShapeVisual, ColourSignalVisual, PaletteVisual } from "@/components/profile-visuals";
 import { demoProfile, retailers } from "@/lib/data";
 import { analysisFit, rankProducts } from "@/lib/scoring";
+import { legacySignalsToPreferences } from "@/lib/learned";
 import { inferColourSeason, theoryFor } from "@/lib/style-theory";
 import type { FashionProfile, Product, Retailer, ScoredProduct } from "@/lib/types";
 
@@ -271,7 +272,7 @@ export default function Home() {
   }, []);
 
   const retailer = retailers.find((item) => item.id === retailerId);
-  const ranked = useMemo(() => rankProducts(retailerId === "all" ? liveProducts : liveProducts.filter((product) => product.retailerId === retailerId), profile, learnedAvoid), [liveProducts, retailerId, learnedAvoid, profile]);
+  const ranked = useMemo(() => rankProducts(retailerId === "all" ? liveProducts : liveProducts.filter((product) => product.retailerId === retailerId), { profile, query, learned: legacySignalsToPreferences(learnedAvoid) }), [liveProducts, retailerId, learnedAvoid, profile, query]);
   const visible = (passportOn && connected ? ranked.filter((item) => showBlocked || !item.blocked) : ranked.map((item) => ({ ...item, score: 0 }))).slice(0, 30);
   const hiddenCount = passportOn && connected ? ranked.filter((item) => item.blocked).length : 0;
 
@@ -320,7 +321,7 @@ export default function Home() {
             if (!response.ok) return { status: "network_unavailable", error: payload.error };
             const nextProducts = payload.products || [];
             setRetailerId("all"); setLiveProducts(nextProducts); setLiveAt(payload.liveAt || new Date().toISOString()); setCatalogueState("connected");
-            return { status: "connected", protocol: "Shopify UCP/MCP", storesQueried: payload.storesQueried, storesResponding: payload.storesResponding, request: input.request, matches: rankProducts(nextProducts, stateRef.current.profile, stateRef.current.learnedAvoid).slice(0, 10).map(({ id, retailerId, name, brand, price, score, productUrl, reasons }) => ({ id, retailer: retailers.find((item) => item.id === retailerId)?.name, name, brand, price, score, productUrl, reasons: reasons.slice(0, 4).map(r => r.label) })) };
+            return { status: "connected", protocol: "Shopify UCP/MCP", storesQueried: payload.storesQueried, storesResponding: payload.storesResponding, request: input.request, matches: rankProducts(nextProducts, { profile: stateRef.current.profile, query: typeof input.request === "string" ? input.request : "", learned: legacySignalsToPreferences(stateRef.current.learnedAvoid) }).slice(0, 10).map(({ id, retailerId, name, brand, price, score, productUrl, reasons }) => ({ id, retailer: retailers.find((item) => item.id === retailerId)?.name, name, brand, price, score, productUrl, reasons: reasons.slice(0, 4).map(r => r.label) })) };
           },
         },
         {
@@ -341,7 +342,7 @@ export default function Home() {
                 return { destination, products: [] as Product[], error: error instanceof Error ? error.message : "Retailer unavailable" };
               }
             }));
-            const matches = rankProducts(responses.flatMap((result) => result.products), stateRef.current.profile, stateRef.current.learnedAvoid).slice(0, 10);
+            const matches = rankProducts(responses.flatMap((result) => result.products), { profile: stateRef.current.profile, query: typeof input.request === "string" ? input.request : "", learned: legacySignalsToPreferences(stateRef.current.learnedAvoid) }).slice(0, 10);
             return {
               status: matches.length ? "connected" : "no_results",
               protocol: "Shopify UCP/MCP",
