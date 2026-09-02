@@ -24,7 +24,9 @@ The repository contains two complementary surfaces:
 1. **Next.js Passport office** — a sub-two-minute Womenswear onboarding, the Travel launcher and a secondary live multi-store comparison. Onboarding first derives a transparent body-proportion and colouring foundation, then anonymously retrieves distinct garments across the full verified retailer panel and prioritises those matching that analysis for 20 rapid preference reactions. If the shopper dislikes more than half, the deck automatically broadens. Menswear is explicitly marked coming soon; no cartoon garments or profile sharing with retailers are involved.
 2. **Chrome extension** — the primary portability proof. It discovers the current store's official Shopify UCP endpoint at runtime, stays invisible on unsupported sites and opens an on-store panel of real ranked products. The one-time site approval synchronises into extension storage, so the Passport follows the user to the next compatible store without another prompt.
 
-The web demonstrator currently searches an 18-store directly verified **test panel** with one adapter. A test skirt query on 1 September 2026 considered 334 category-correct products from 16 responding stores, with zero dresses or tops admitted. This panel proves breadth but does not define reach: Travel mode accepts any store the user chooses and the extension discovers its compatibility at runtime. Searching every Shopify store at once would require a merchant directory and a global index; Shopify exposes per-store endpoints, not a public global catalogue endpoint. No paid API, product feed, licensed styling database or retained photo is required.
+The web demonstrator searches an 18-store directly verified **test panel** with one adapter. Measured on 2 September 2026 with the query "dresses under £100": 1,115 catalogue products scanned across 18 responding stores, 1,002 dresses found, 71 strong matches, 166 worth a look, 765 held by the profile's own rules, and zero non-dresses admitted to the dress set. Against Nobody's Child alone, 320 products were scanned across 8 cursor pages with more pages still available.
+
+This panel proves the adapter; it does not define its reach. Travel mode accepts any store the user chooses and the extension discovers compatibility at runtime. Searching every Shopify store at once would require a merchant directory and a global index; Shopify exposes per-store endpoints, not a public global catalogue endpoint. No paid API, product feed, licensed styling database or retained photo is required.
 
 ### WebMCP tools
 
@@ -76,7 +78,7 @@ node --check extension/popup.js
 7. Select the Fashion Passport control and review exactly what will be shared. This is the single connection prompt; subsequent compatible stores and category changes do not ask again.
 8. The extension follows the retailer's official catalogue cursors in pages of up to 250, deduplicates the response, and opens an on-site ranked results panel. The panel distinguishes the top products shown, category-relevant products ranked and complete live catalogue products scanned; it never presents one API page as the retailer's total.
 
-Live verified examples as of 1 September 2026 include Jigsaw, Lucy & Yak, Oh Polly, Never Fully Dressed, RIXO, KITRI, OMNES, Nobody's Child, House of Sunny, Motel Rocks, MESHKI, Nadine Merabi, Finisterre, Passenger, Beyond Nine, Albaray, Ro&Zo and Disturbia.
+Live verified retailers as of 2 September 2026 include Jigsaw, Lucy & Yak, Oh Polly, Never Fully Dressed, RIXO, KITRI, OMNES, Nobody's Child, House of Sunny, Motel Rocks, MESHKI, Nadine Merabi, Finisterre, Passenger, Beyond Nine, Albaray, Ro&Zo and Disturbia.
 
 The standalone app and extension never invent inventory under a retailer’s name. Both call `https://{retailer-domain}/api/ucp/mcp`, use Shopify's current `search_catalog` contract, enforce the requested garment category after retrieval, and display retailer-hosted images and links. The extension requests broad HTTPS host access because compatibility is discovered at runtime; before the one-time connection it sends only an anonymous `tools/list` capability check to the origin currently being visited. The full Passport is transmitted only after visible approval.
 
@@ -123,9 +125,17 @@ The production path is designed to map onto open garment and commerce vocabulari
 
 The current demonstrator keeps its compact vocabulary in the repository so it remains deterministic, free and easy to judge.
 
+## Scope
+
+Womenswear only. Menswear is labelled `Coming soon` and does not pretend to
+work.
+
 ## Status
 
-This is a demonstrator-class submission for the 2026 WebMCP Challenge. Onboarding and shopping cards are retrieved live through retailer-owned Shopify UCP endpoints; there is no static product fallback. The extension proves the same Passport can travel to compatible real storefronts without retailer-specific DOM adapters.
+This is a demonstrator-class submission for the 2026 WebMCP Challenge.
+See [`docs/DEMO.md`](docs/DEMO.md) for the two-minute script,
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the pipeline, and
+[`docs/PRIVACY.md`](docs/PRIVACY.md) for what is stored and where. Onboarding and shopping cards are retrieved live through retailer-owned Shopify UCP endpoints; there is no static product fallback. The extension proves the same Passport can travel to compatible real storefronts without retailer-specific DOM adapters.
 
 ## License
 

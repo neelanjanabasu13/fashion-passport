@@ -670,7 +670,7 @@ export default function Home() {
       {view === "privacy" && <PrivacyView connected={connected} onRevoke={revoke} />}
       {view === "shop" && <main className="shop-page">
         <section className="hero-copy"><p className="eyebrow"><Icon name="sparkle" /> One Passport across Shopify fashion</p><h1>Stop starting from scratch.</h1><p>One standard adapter carries your size, taste and suitability context into any compatible Shopify fashion store.</p>
-          <div className="scale-proof"><strong>818,354</strong><span>estimated live Shopify apparel stores <a href="https://storeleads.app/reports/shopify/category/Apparel" target="_blank" rel="noreferrer">source · 28 Aug 2026</a></span><i></i><strong>1 adapter</strong><span>discovered at runtime</span></div>
+          <div className="scale-proof"><strong>{retailers.length}</strong><span>retailers verified against their own UCP endpoint</span><i></i><strong>1 adapter</strong><span>compatibility discovered at runtime, not a fixed list</span></div>
           <form className="search-box" onSubmit={(e) => { e.preventDefault(); if (!connected) setShowApproval(true); else void loadCatalogue(query); }}><Icon name="search"/><input aria-label="What are you shopping for?" value={query} onChange={(e) => setQuery(e.target.value)} /><button disabled={catalogueState === "loading"}>{catalogueState === "loading" ? `Searching ${retailers.length} stores…` : "Find my matches"}<Icon name="arrow"/></button></form>
           <div className="query-chips"><span>Try</span>{["Summer wedding", "Casual cotton with sleeves", "Colourful work dress"].map((text) => <button key={text} onClick={() => setQuery(text)}>{text}</button>)}</div>
         </section>
