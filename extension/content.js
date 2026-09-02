@@ -45,11 +45,11 @@
       "Deep Autumn": ["terracotta", "rust", "burnt orange", "camel", "olive", "brown", "jewel"],
     };
     const shapes = {
-      "Inverted triangle": ["a-line", "fit and flare", "flowy", "v-neck", "scoop", "asymmetric"],
-      Pear: ["a-line", "fit and flare", "structured", "boat neck", "square neck", "cowl"],
-      Hourglass: ["fit and flare", "structured", "a-line", "v-neck", "scoop", "square neck"],
-      Rectangle: ["fit and flare", "flowy", "structured", "asymmetric", "cowl", "scoop"],
-      Apple: ["flowy", "a-line", "structured", "v-neck", "scoop", "asymmetric"],
+      "Inverted triangle": ["a-line", "fit and flare", "flowy", "v-neck", "scoop", "asymmetric", "sleeveless", "three-quarter", "midi", "maxi", "chiffon", "silk", "linen"],
+      Pear: ["a-line", "fit and flare", "structured", "boat neck", "square neck", "cowl", "long sleeve", "three-quarter", "midi", "maxi", "cotton", "linen", "silk"],
+      Hourglass: ["fit and flare", "structured", "a-line", "v-neck", "scoop", "square neck", "three-quarter", "long sleeve", "sleeveless", "midi", "silk", "cotton", "linen"],
+      Rectangle: ["fit and flare", "flowy", "structured", "asymmetric", "cowl", "scoop", "cap sleeve", "three-quarter", "mini", "midi", "chiffon", "silk", "linen"],
+      Apple: ["flowy", "a-line", "structured", "v-neck", "scoop", "asymmetric", "three-quarter", "long sleeve", "midi", "maxi", "silk", "chiffon", "linen"],
     };
     return [...(colours[profile.season] || []), ...(shapes[profile.shape] || [])];
   };

@@ -5,7 +5,7 @@ import Image from "next/image";
 import { DressArt } from "@/components/dress-art";
 import { Icon } from "@/components/icons";
 import { demoProfile, retailers } from "@/lib/data";
-import { rankProducts } from "@/lib/scoring";
+import { analysisFit, rankProducts } from "@/lib/scoring";
 import { inferColourSeason, theoryFor } from "@/lib/style-theory";
 import type { FashionProfile, Product, Retailer, ScoredProduct } from "@/lib/types";
 
@@ -17,6 +17,7 @@ const STORE_TASTE_VOTES = "fashion-passport:taste-votes";
 
 type View = "travel" | "shop" | "passport" | "taste" | "privacy";
 type Reaction = "up" | "down";
+const TASTE_TARGET = 20;
 
 function retailerKind(retailer: Retailer) {
   return retailer.kind === "shopify" ? "Native Shopify UCP" : "Retailer catalogue";
@@ -136,22 +137,10 @@ function TasteView({ profile, onProfile, onDone }: { profile: FashionProfile; on
   const [index, setIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [sources, setSources] = useState(0);
+  const [theoryAligned, setTheoryAligned] = useState(0);
+  const [dislikes, setDislikes] = useState(0);
+  const [broadened, setBroadened] = useState(false);
   const [reactionNote, setReactionNote] = useState("");
-  useEffect(() => {
-    const controller = new AbortController();
-    const load = async () => {
-      try {
-        const response = await fetch("/api/shopify/taste", { signal: controller.signal });
-        const payload = await response.json() as { products?: Product[]; sources?: number };
-        const seen = new Set((JSON.parse(localStorage.getItem("fashion-passport:taste-onboarding") || "[]") as { productId: string }[]).map((item) => item.productId));
-        setChoices((payload.products || []).filter((product) => !seen.has(product.id)).slice(0, 36));
-        setSources(payload.sources || 0);
-      } catch { if (!controller.signal.aborted) setChoices([]); }
-      finally { if (!controller.signal.aborted) setLoading(false); }
-    };
-    void load();
-    return () => controller.abort();
-  }, []);
   const estimatedSeason = knownSeason || inferColourSeason(undertone, contrast, depth);
   const derivedProfile = { ...profile, colourSeason: estimatedSeason, bodyShape: bodyShape || profile.bodyShape };
   const applyGuidance = () => {
@@ -159,6 +148,17 @@ function TasteView({ profile, onProfile, onDone }: { profile: FashionProfile; on
     localStorage.setItem(STORE_PROFILE, JSON.stringify(derivedProfile));
     document.dispatchEvent(new Event("fashion-passport:connection-changed"));
     setStage("result");
+  };
+  const startTaste = async () => {
+    setStage("taste"); setLoading(true); setChoices([]); setIndex(0); setDislikes(0); setBroadened(false); setReactionNote("");
+    try {
+      const response = await fetch("/api/shopify/taste", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ profile: derivedProfile }) });
+      const payload = await response.json() as { products?: Product[]; sources?: number; theoryAligned?: number };
+      const seen = new Set((JSON.parse(localStorage.getItem("fashion-passport:taste-onboarding") || "[]") as { productId: string }[]).map((item) => item.productId));
+      setChoices((payload.products || []).filter((product) => !seen.has(product.id)));
+      setSources(payload.sources || 0); setTheoryAligned(payload.theoryAligned || 0);
+    } catch { setChoices([]); }
+    finally { setLoading(false); }
   };
   const current = choices[index];
   const react = (reaction: Reaction) => {
@@ -171,8 +171,20 @@ function TasteView({ profile, onProfile, onDone }: { profile: FashionProfile; on
     localStorage.setItem(STORE_TASTE_VOTES, JSON.stringify(votes));
     const signals = Object.entries(votes).flatMap(([trait, tally]) => tally.up - tally.down >= 2 ? [`love:${trait}`] : tally.down - tally.up >= 2 ? [`avoid:${trait}`] : []);
     localStorage.setItem(STORE_SIGNALS, JSON.stringify(signals));
-    const theoryReason = rankProducts([current], profile)[0]?.reasons.find((reason) => reason.kind === "theory");
-    setReactionNote(reaction === "down" && theoryReason ? "Got it. Your preference overrides the suitability suggestion." : reaction === "up" ? "Saved. We wait for a pattern before changing your profile." : "Saved. One dislike will not blacklist every feature on this item.");
+    const nextDislikes = dislikes + (reaction === "down" ? 1 : 0);
+    const nextTotal = index + 1;
+    setDislikes(nextDislikes);
+    if (!broadened && nextTotal >= 6 && nextDislikes / nextTotal > 0.5) {
+      setBroadened(true);
+      setChoices((deck) => {
+        const seen = deck.slice(0, nextTotal); const remaining = deck.slice(nextTotal);
+        return [...seen, ...remaining.sort((a, b) => analysisFit(a, derivedProfile).score - analysisFit(b, derivedProfile).score)];
+      });
+      setReactionNote("Your taste is overruling the analysis, so the next choices will deliberately broaden beyond it.");
+    } else {
+      const fitsTheory = analysisFit(current, derivedProfile).score > 0;
+      setReactionNote(reaction === "down" && fitsTheory ? "Got it. Your preference overrides this suitability suggestion." : reaction === "up" ? "Saved. We wait for a repeated pattern before changing your profile." : "Saved. One dislike will not blacklist every feature on this item.");
+    }
     setIndex((n) => n + 1);
   };
   const bodyOptions = [
@@ -181,22 +193,24 @@ function TasteView({ profile, onProfile, onDone }: { profile: FashionProfile; on
     ["Apple", "Midsection is the fullest point"],
   ];
   const theory = theoryFor(derivedProfile.colourSeason, derivedProfile.bodyShape);
+  const currentFit = current ? analysisFit(current, derivedProfile) : { score: 0, matches: [] };
   return (
     <main className="onboarding-page">
       <div className="onboarding-progress"><span className={stage !== "intro" ? "done" : "active"}>1 · You</span><span className={["colour", "result", "taste"].includes(stage) ? "done" : stage === "body" ? "active" : ""}>2 · Shape</span><span className={["result", "taste"].includes(stage) ? "done" : stage === "colour" ? "active" : ""}>3 · Colour</span><span className={stage === "taste" ? "active" : ""}>4 · Taste</span></div>
       {stage === "intro" && <section className="onboarding-panel intro-panel"><p className="eyebrow">Your Passport in under 2 minutes</p><h1>First, what may suit you.<br/>Then, what you love.</h1><p>We estimate a useful starting point from your proportions, undertone, skin depth and contrast. Then real-product reactions teach your taste. If the two disagree, your preference wins.</p><div className="scope-choice"><button onClick={() => setStage("body")}><span>Available now</span><strong>Womenswear</strong><small>Build my Passport →</small></button><button disabled><span>Coming soon</span><strong>Menswear</strong><small>The same portable profile model</small></button></div><div className="two-layer-proof"><div><strong>01</strong><span>Suitability guidance<small>Body + colouring</small></span></div><b>+</b><div><strong>02</strong><span>Personal preference<small>Real-product reactions</small></span></div><b>=</b><div><strong>FP</strong><span>Your ranking<small>Preference can overrule</small></span></div></div></section>}
-      {stage === "body" && <section className="onboarding-panel question-panel"><p className="eyebrow">About 20 seconds</p><h2>Which description is closest to your proportions?</h2><p>No measurements or labels required. Choose the relationship you see most often in fitted clothing.</p><div className="answer-grid body-answers">{bodyOptions.map(([value, label]) => <button className={bodyShape === value ? "selected" : ""} key={value} onClick={() => setBodyShape(value)}><strong>{label}</strong><small>{value}</small></button>)}</div><div className="step-actions"><button className="text-button" onClick={() => setStage("intro")}>← Back</button><button className="primary-button" disabled={!bodyShape} onClick={() => setStage("colour")}>Next: colouring <Icon name="arrow"/></button></div></section>}
-      {stage === "colour" && <section className="onboarding-panel question-panel colour-panel"><p className="eyebrow">About 35 seconds</p><h2>Find your colour starting point</h2><p>These three visual signals are more useful than skin colour alone. Choose “not sure” freely—the result is guidance, not a diagnosis.</p><div className="colour-questions"><fieldset><legend>Undertone</legend><small>Which tends to make your skin look clearer?</small><div>{[["cool","Silver + optic white"],["warm","Gold + cream"],["neutral","Both / not sure"]].map(([value,label]) => <button type="button" className={undertone === value ? "selected" : ""} key={value} onClick={() => setUndertone(value)}>{label}</button>)}</div></fieldset><fieldset><legend>Skin depth</legend><small>Your natural depth, without judging undertone</small><div>{[["light","Fair / light"],["medium","Medium / olive"],["deep","Deep"]].map(([value,label]) => <button type="button" className={depth === value ? "selected" : ""} key={value} onClick={() => setDepth(value)}>{label}</button>)}</div></fieldset><fieldset><legend>Natural contrast</legend><small>Difference between hair, eyes and skin</small><div>{[["high","High / striking"],["soft","Soft / blended"],["clear","Clear / bright"]].map(([value,label]) => <button type="button" className={contrast === value ? "selected" : ""} key={value} onClick={() => setContrast(value)}>{label}</button>)}</div></fieldset></div><label className="known-season">Already know your season?<select value={knownSeason} onChange={(event) => setKnownSeason(event.target.value)}><option value="">Let Passport estimate</option>{["Deep Winter","Soft Summer","Warm Spring","Deep Autumn"].map((season) => <option key={season}>{season}</option>)}</select></label><div className="step-actions"><button className="text-button" onClick={() => setStage("body")}>← Back</button><button className="primary-button" disabled={!undertone || !depth || !contrast} onClick={applyGuidance}>See my foundation <Icon name="arrow"/></button></div></section>}
-      {stage === "result" && <section className="onboarding-panel result-panel"><p className="eyebrow">Your suitability foundation</p><h2>A starting point—not a rulebook.</h2><div className="foundation-results"><article><span>Body proportions</span><strong>{derivedProfile.bodyShape}</strong><p>Likely starting points: {theory.silhouettes.join(", ").toLowerCase()} shapes and {theory.necklines.join(", ").toLowerCase()} necklines.</p></article><article><span>Colour direction</span><strong>{derivedProfile.colourSeason}</strong><p>Likely starting points: {theory.colours.join(", ").toLowerCase()}.</p></article></div><div className="override-callout"><Icon name="sparkle"/><div><strong>You remain in charge</strong><p>If you dislike any suggestion, your thumbs-down wins. If you love something outside this guidance, Fashion Passport keeps showing it.</p></div></div><div className="step-actions"><button className="text-button" onClick={() => setStage("colour")}>Adjust answers</button><button className="primary-button" onClick={() => setStage("taste")}>Now teach my taste <Icon name="arrow"/></button></div></section>}
-      {stage === "taste" && <><div className="page-heading compact"><p className="eyebrow">Live products · {sources || "multiple"} retailer websites</p><h1>Now make it yours.</h1><p>Eight quick reactions are enough to begin. Keep going whenever you want; we learn repeated patterns instead of overreacting to one item.</p></div><section className="taste-stage">
-        <div className="progress-meta"><span>{loading ? "Loading live products" : `${Math.min(index + 1, choices.length)} of ${choices.length} available`}</span><span>{Math.min(index, 8)} / 8 quick start</span></div>
-        <div className="progress-line"><span style={{ width: `${Math.min(100, (index / 8) * 100)}%` }} /></div>
-        {loading ? <div className="taste-loading">Reading live products across Shopify retailers…</div> : current ? <>
+      {stage === "body" && <section className="onboarding-panel question-panel"><p className="eyebrow">About 20 seconds</p><h2>Which description is closest to your proportions?</h2><p>No measurements or labels required. Choose the relationship you see most often in fitted clothing.</p><div className="answer-grid body-answers">{bodyOptions.map(([value, label]) => <button className={bodyShape === value ? "selected" : ""} key={value} onClick={() => setBodyShape(value)}><strong>{label}</strong><small>{value}</small></button>)}</div>{bodyShape && <div className="guidance-preview"><Icon name="sparkle"/><span><strong>Usually worth trying first</strong>{theoryFor(profile.colourSeason, bodyShape).silhouettes.join(", ")} shapes · {theoryFor(profile.colourSeason, bodyShape).necklines.join(", ")} necklines · {theoryFor(profile.colourSeason, bodyShape).materials.join(", ")} fabrics</span></div>}<div className="step-actions"><button className="text-button" onClick={() => setStage("intro")}>← Back</button><button className="primary-button" disabled={!bodyShape} onClick={() => setStage("colour")}>Next: colouring <Icon name="arrow"/></button></div></section>}
+      {stage === "colour" && <section className="onboarding-panel question-panel colour-panel"><p className="eyebrow">About 35 seconds</p><h2>Find your colour starting point</h2><p>These three visual signals are more useful than skin colour alone. Choose “not sure” freely—the result is guidance, not a diagnosis.</p><div className="colour-questions"><fieldset><legend>Undertone</legend><small>Which tends to make your skin look clearer?</small><div>{[["cool","Silver + optic white"],["warm","Gold + cream"],["neutral","Both / not sure"]].map(([value,label]) => <button type="button" className={undertone === value ? "selected" : ""} key={value} onClick={() => setUndertone(value)}>{label}</button>)}</div></fieldset><fieldset><legend>Skin depth</legend><small>Your natural depth, without judging undertone</small><div>{[["light","Fair / light"],["medium","Medium / olive"],["deep","Deep"]].map(([value,label]) => <button type="button" className={depth === value ? "selected" : ""} key={value} onClick={() => setDepth(value)}>{label}</button>)}</div></fieldset><fieldset><legend>Natural contrast</legend><small>Difference between hair, eyes and skin</small><div>{[["high","High / striking"],["soft","Soft / blended"],["clear","Clear / bright"]].map(([value,label]) => <button type="button" className={contrast === value ? "selected" : ""} key={value} onClick={() => setContrast(value)}>{label}</button>)}</div></fieldset></div><label className="known-season">Already know your season?<select value={knownSeason} onChange={(event) => setKnownSeason(event.target.value)}><option value="">Let Passport estimate</option>{["Deep Winter","Soft Summer","Warm Spring","Deep Autumn"].map((season) => <option key={season}>{season}</option>)}</select></label>{undertone && depth && contrast && <div className="guidance-preview"><Icon name="sparkle"/><span><strong>{estimatedSeason} starting palette</strong>{theoryFor(estimatedSeason, bodyShape || profile.bodyShape).colours.join(", ")} are usually stronger starting points.</span></div>}<div className="step-actions"><button className="text-button" onClick={() => setStage("body")}>← Back</button><button className="primary-button" disabled={!undertone || !depth || !contrast} onClick={applyGuidance}>See my foundation <Icon name="arrow"/></button></div></section>}
+      {stage === "result" && <section className="onboarding-panel result-panel"><p className="eyebrow">Your suitability foundation</p><h2>A starting point—not a rulebook.</h2><div className="foundation-results"><article><span>Body proportions</span><strong>{derivedProfile.bodyShape}</strong><p>Try first: {theory.silhouettes.join(", ").toLowerCase()} shapes; {theory.necklines.join(", ").toLowerCase()} necklines; {theory.sleeves.join(", ").toLowerCase()} sleeves; {theory.lengths.join(", ").toLowerCase()} lengths; {theory.materials.join(", ").toLowerCase()} fabrics.</p></article><article><span>Colour direction</span><strong>{derivedProfile.colourSeason}</strong><p>Colours likely to be stronger starting points: {theory.colours.join(", ").toLowerCase()}.</p></article></div><div className="override-callout"><Icon name="sparkle"/><div><strong>You remain in charge</strong><p>The next products primarily follow this analysis. If you dislike more than half, the deck automatically broadens and lets your taste overrule it.</p></div></div><div className="step-actions"><button className="text-button" onClick={() => setStage("colour")}>Adjust answers</button><button className="primary-button" onClick={() => void startTaste()}>Now teach my taste <Icon name="arrow"/></button></div></section>}
+      {stage === "taste" && <><div className="page-heading compact"><p className="eyebrow">{broadened ? "Taste-led mode" : "Analysis-led mode"} · {sources || "multiple"} live retailers</p><h1>Now make it yours.</h1><p>Twenty rapid reactions reveal patterns across colour, silhouette, neckline, sleeve, length, fabric and print. The first deck follows your analysis; it broadens automatically only if you reject more than half.</p></div><section className="taste-stage">
+        <div className="deck-status"><strong>{broadened ? "Your taste has overruled the analysis" : `${theoryAligned} analysis-aligned products found`}</strong><span>{broadened ? "Showing wider choices now" : "Prioritising these before exploration"}</span></div>
+        <div className="progress-meta"><span>{loading ? "Building your analysis-led deck" : `${Math.min(index + 1, choices.length)} of ${choices.length} available`}</span><span>{Math.min(index, TASTE_TARGET)} / {TASTE_TARGET} signals</span></div>
+        <div className="progress-line"><span style={{ width: `${Math.min(100, (index / TASTE_TARGET) * 100)}%` }} /></div>
+        {loading ? <div className="taste-loading">Matching live products to your body and colour analysis…</div> : current ? <>
           <div className="taste-card" key={current.id}>{current.imageUrl && <Image className="taste-real-image" src={current.imageUrl} alt={current.name} fill sizes="340px" />}<div className="taste-caption"><strong>{current.brand}</strong><span>{current.name}</span></div></div>
-          {rankProducts([current], profile)[0]?.reasons.find((reason) => reason.kind === "theory") && <div className="theory-nudge"><Icon name="sparkle"/><span><strong>Suitability signal</strong>{rankProducts([current], profile)[0].reasons.find((reason) => reason.kind === "theory")?.label}</span></div>}
+          {currentFit.score > 0 && <div className="theory-nudge"><Icon name="sparkle"/><span><strong>{currentFit.score} analysis {currentFit.score === 1 ? "match" : "matches"}</strong>{currentFit.matches.slice(0, 3).join(" · ")}</span></div>}
           <div className="taste-actions"><button onClick={() => react("down")} aria-label="Not for me"><Icon name="thumbsDown" /><span>Not me</span></button><button className="love" onClick={() => react("up")} aria-label="Love it"><Icon name="thumbsUp" /><span>Love it</span></button></div>
           <p className="microcopy">{reactionNote || "Stored locally. This real product will not appear again."}</p>
-          {index >= 8 && <button className="primary-button taste-finish" onClick={onDone}>Finish my Passport <Icon name="arrow"/></button>}
+          {index >= TASTE_TARGET && <button className="primary-button taste-finish" onClick={onDone}>Finish my Passport <Icon name="arrow"/></button>}
         </> : <div className="taste-complete"><div className="approval-icon"><Icon name="check" /></div><h2>Your Passport is ready</h2><p>Your suitability foundation and preference patterns are saved locally and ready to travel.</p><button className="primary-button" onClick={onDone}>Take my Passport shopping <Icon name="arrow" /></button></div>}
       </section></>}
     </main>
