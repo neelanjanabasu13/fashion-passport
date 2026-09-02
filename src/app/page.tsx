@@ -194,6 +194,7 @@ function HomeView({ onboarded, onBuild, onPassport, onShop, onTravel }: { onboar
           </dl>
         </div>
         <aside className="home-verdict" aria-label="How Fashion Passport ranks clothes">
+          <div className="material-motion" aria-hidden="true"><span></span><span></span></div>
           <p>Fashion Passport · 001</p>
           <h2>What suits you <span className="heart-cross" aria-label="times"><svg viewBox="0 0 24 30" aria-hidden="true"><path d="M12 14C10 11 3 8 3 4.5 3 1.8 6.5.5 8.8 2.2 10.3 3.2 11.2 4.5 12 6c.8-1.5 1.7-2.8 3.2-3.8C17.5.5 21 1.8 21 4.5 21 8 14 11 12 14Z"/><path d="M12 16c2 3 9 6 9 9.5 0 2.7-3.5 4-5.8 2.3-1.5-1-2.4-2.3-3.2-3.8-.8 1.5-1.7 2.8-3.2 3.8C6.5 29.5 3 28.2 3 25.5 3 22 10 19 12 16Z"/></svg></span> what you love</h2>
           <div className="home-verdict-layers"><span><b>01</b> Proportions + colouring</span><span><b>02</b> Your explicit choices</span><span><b>03</b> What reactions teach it</span></div>
