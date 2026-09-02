@@ -230,7 +230,7 @@ function TravelView({ connected, onConnect, onCompare }: { connected: boolean; o
   };
   return (
     <main className="travel-page">
-      <section className="travel-hero"><p className="eyebrow"><Icon name="sparkle"/> The portability proof</p><h1>One Passport. Store to store.</h1><p>Open a compatible Shopify store. Fashion Passport discovers its official endpoint and applies the same size, taste and suitability profile on the retailer’s own website.</p>
+      <section className="travel-hero"><p className="eyebrow"><Icon name="sparkle"/> The portability proof</p><h1>One Fashion Passport to shop them all.</h1><p>Open a compatible Shopify store. Fashion Passport discovers its official endpoint and applies the same size, taste and suitability profile on the retailer’s own website.</p>
         <div className={`travel-status ${connected ? "ready" : ""}`}><Icon name={connected ? "check" : "lock"}/><span><strong>{connected ? "Passport connected once" : "Connect once before travelling"}</strong>{connected ? "No new prompt when you change retailer, category, query or tab." : "One clear approval replaces repetitive retailer-by-retailer consent."}</span>{!connected && <button onClick={onConnect}>Connect once</button>}</div>
       </section>
       <section className="travel-demo">
