@@ -21,7 +21,7 @@ const STORE_SIGNALS = "fashion-passport:learned-avoid";
 const STORE_PROFILE = "fashion-passport:profile";
 const STORE_TASTE_VOTES = "fashion-passport:taste-votes";
 
-type View = "travel" | "shop" | "passport" | "taste" | "privacy";
+type View = "home" | "travel" | "shop" | "passport" | "taste" | "privacy";
 type Reaction = "up" | "down";
 const TASTE_TARGET = 20;
 /** A render batch for performance. Never a recommendation cap. */
@@ -175,6 +175,50 @@ function PassportView({ profile, learned, onRebuild }: { profile: FashionProfile
   );
 }
 
+function HomeView({ onboarded, onBuild, onPassport, onShop, onTravel }: { onboarded: boolean; onBuild: () => void; onPassport: () => void; onShop: () => void; onTravel: () => void }) {
+  return (
+    <main className="home-page">
+      <section className="home-hero">
+        <div className="home-hero-copy">
+          <p className="eyebrow">One fitting · every compatible shop</p>
+          <h1>Your fashion profile shouldn’t reset at every website.</h1>
+          <p>Fashion Passport combines what is likely to suit your proportions and colouring with what you actually love—then carries that context into compatible fashion stores.</p>
+          <div className="home-actions">
+            <button className="primary-button" onClick={onboarded ? onPassport : onBuild}>{onboarded ? "Open my Passport" : "Build my Passport"}<Icon name="arrow" /></button>
+            <button className="text-button" onClick={onTravel}>See it work across stores →</button>
+          </div>
+          <dl className="home-proof">
+            <div><dt>Under 2 min</dt><dd>to build</dd></div>
+            <div><dt>One approval</dt><dd>across compatible stores</dd></div>
+            <div><dt>Local</dt><dd>taste learning stays here</dd></div>
+          </dl>
+        </div>
+        <aside className="home-verdict" aria-label="How Fashion Passport ranks clothes">
+          <p>Fashion Passport · 001</p>
+          <h2>What suits you <span className="heart-cross" aria-label="times"><svg viewBox="0 0 24 30" aria-hidden="true"><path d="M12 14C10 11 3 8 3 4.5 3 1.8 6.5.5 8.8 2.2 10.3 3.2 11.2 4.5 12 6c.8-1.5 1.7-2.8 3.2-3.8C17.5.5 21 1.8 21 4.5 21 8 14 11 12 14Z"/><path d="M12 16c2 3 9 6 9 9.5 0 2.7-3.5 4-5.8 2.3-1.5-1-2.4-2.3-3.2-3.8-.8 1.5-1.7 2.8-3.2 3.8C6.5 29.5 3 28.2 3 25.5 3 22 10 19 12 16Z"/></svg></span> what you love</h2>
+          <div className="home-verdict-layers"><span><b>01</b> Proportions + colouring</span><span><b>02</b> Your explicit choices</span><span><b>03</b> What reactions teach it</span></div>
+          <strong>Your preference always wins.</strong>
+        </aside>
+      </section>
+
+      <section className="how-it-works">
+        <div className="how-heading"><p className="eyebrow">How it works</p><h2>Build it once. Let it get better as you shop.</h2></div>
+        <div className="how-steps">
+          <article><span>01</span><h3>Find your starting point</h3><p>A short visual check maps body proportions and colouring to transparent styling guidance.</p><button onClick={onBuild}>Start the fitting →</button></article>
+          <article><span>02</span><h3>Teach it your taste</h3><p>React to real clothes. Your choices overrule theory and every reaction sharpens future rankings.</p><button onClick={onboarded ? onPassport : onBuild}>{onboarded ? "See my profile" : "Build my profile"} →</button></article>
+          <article><span>03</span><h3>Use it where you shop</h3><p>Connect once. The same Passport ranks live products here and on compatible retailers’ own websites.</p><button onClick={onShop}>Shop with my Passport →</button></article>
+        </div>
+      </section>
+
+      <section className="home-problem">
+        <p className="eyebrow">The problem it removes</p>
+        <h2>No more repeating your size, budget, colours, cuts and dislikes at every store.</h2>
+        <button className="primary-button" onClick={onboarded ? onShop : onBuild}>{onboarded ? "Find my matches" : "Create my Passport"}<Icon name="arrow" /></button>
+      </section>
+    </main>
+  );
+}
+
 function TravelView({ connected, onConnect, onCompare }: { connected: boolean; onConnect: () => void; onCompare: () => void }) {
   const [storeUrl, setStoreUrl] = useState("");
   const openStore = (event: FormEvent) => {
@@ -186,7 +230,7 @@ function TravelView({ connected, onConnect, onCompare }: { connected: boolean; o
   };
   return (
     <main className="travel-page">
-      <section className="travel-hero"><p className="eyebrow"><Icon name="sparkle"/> The actual Passport experience</p><h1>Take it with you.</h1><p>Open a compatible Shopify store. Fashion Passport discovers its official endpoint and applies the same size, taste and suitability profile on the retailer’s own website.</p>
+      <section className="travel-hero"><p className="eyebrow"><Icon name="sparkle"/> The portability proof</p><h1>One Passport. Store to store.</h1><p>Open a compatible Shopify store. Fashion Passport discovers its official endpoint and applies the same size, taste and suitability profile on the retailer’s own website.</p>
         <div className={`travel-status ${connected ? "ready" : ""}`}><Icon name={connected ? "check" : "lock"}/><span><strong>{connected ? "Passport connected once" : "Connect once before travelling"}</strong>{connected ? "No new prompt when you change retailer, category, query or tab." : "One clear approval replaces repetitive retailer-by-retailer consent."}</span>{!connected && <button onClick={onConnect}>Connect once</button>}</div>
       </section>
       <section className="travel-demo">
@@ -451,9 +495,10 @@ function PrivacyView({ connected, onRevoke }: { connected: boolean; onRevoke: ()
 }
 
 export default function Home() {
-  const [view, setView] = useState<View>("taste");
+  const [view, setView] = useState<View>("home");
   const [retailerId, setRetailerId] = useState("all");
   const [connected, setConnected] = useState(false);
+  const [onboarded, setOnboarded] = useState(false);
   const [profile, setProfile] = useState<FashionProfile>(demoProfile);
   const [showApproval, setShowApproval] = useState(false);
   const [learnedAvoid, setLearnedAvoid] = useState<string[]>([]);
@@ -481,7 +526,7 @@ export default function Home() {
     const timer = window.setTimeout(() => {
       try {
         setConnected(localStorage.getItem(STORE_CONNECTED) === "true");
-        setView(localStorage.getItem(STORE_ONBOARDED) === "true" ? "travel" : "taste");
+        setOnboarded(localStorage.getItem(STORE_ONBOARDED) === "true");
         setLearnedAvoid(JSON.parse(localStorage.getItem(STORE_SIGNALS) || "[]"));
         setLearnedTaste(JSON.parse(localStorage.getItem(STORE_TASTE_VOTES) || "{}") as LearnedTaste);
         setProfile(readProfile(localStorage.getItem(STORE_PROFILE), demoProfile));
@@ -706,11 +751,12 @@ export default function Home() {
     setLastLearn(null);
   };
   const revoke = () => { setConnected(false); localStorage.removeItem(STORE_CONNECTED); document.dispatchEvent(new Event("fashion-passport:connection-changed")); setLiveProducts([]); setCatalogueState("idle"); };
-  const finishOnboarding = () => { localStorage.setItem(STORE_ONBOARDED, "true"); try { setLearnedAvoid(JSON.parse(localStorage.getItem(STORE_SIGNALS) || "[]")); } catch { /* Keep the stable profile. */ } setView("travel"); };
+  const finishOnboarding = () => { localStorage.setItem(STORE_ONBOARDED, "true"); setOnboarded(true); try { setLearnedAvoid(JSON.parse(localStorage.getItem(STORE_SIGNALS) || "[]")); } catch { /* Keep the stable profile. */ } setView("passport"); };
 
   return (
     <div className="app-shell">
-      <header className="topbar"><button className="brand" onClick={() => setView("travel")}><span><Icon name="passport" /></span><strong>Fashion<br/>Passport</strong></button><nav>{(["travel", "shop", "passport", "taste", "privacy"] as View[]).map((item) => <button key={item} className={view === item ? "active" : ""} onClick={() => setView(item)}>{item === "shop" ? "Compare stores" : item === "taste" ? "Build my Passport" : item[0].toUpperCase() + item.slice(1)}</button>)}</nav><div className="webmcp-pill"><i></i><span>WebMCP ready</span></div></header>
+      <header className="topbar"><button className="brand" onClick={() => setView("home")}><span><Icon name="passport" /></span><strong>Fashion<br/>Passport</strong></button><nav>{(["home", "taste", "passport", "shop", "travel"] as View[]).map((item) => <button key={item} className={view === item ? "active" : ""} onClick={() => setView(item)}>{item === "taste" ? "Build yours" : item === "passport" ? "My Passport" : item === "shop" ? "Shop" : item === "travel" ? "Use on stores" : "Home"}</button>)}</nav><div className="webmcp-pill"><i></i><span>WebMCP ready</span></div></header>
+      {view === "home" && <HomeView onboarded={onboarded} onBuild={() => setView("taste")} onPassport={() => setView("passport")} onShop={() => setView("shop")} onTravel={() => setView("travel")} />}
       {view === "travel" && <TravelView connected={connected} onConnect={() => setShowApproval(true)} onCompare={() => setView("shop")}/>}
       {view === "passport" && <PassportView profile={profile} learned={learnedTaste} onRebuild={() => setView("taste")} />}
       {view === "taste" && <TasteView profile={profile} onProfile={setProfile} onDone={finishOnboarding} />}
@@ -761,7 +807,7 @@ export default function Home() {
           </> : <section className={`live-site-only ${catalogueState === "error" ? "has-error" : ""}`}><div className="live-site-icon"><Icon name={catalogueState === "error" ? "close" : "external"} /></div><p className="eyebrow">{catalogueState === "error" ? "Live connection needs another try" : "Retailer-owned products only"}</p><h2>{catalogueState === "error" ? catalogueError : `Search ${retailers.length} live fashion stores together.`}</h2><p>{catalogueState === "error" ? "No cached or invented products have replaced the retailer response." : "Connect once. Fashion Passport calls every verified retailer-owned Shopify endpoint, enforces the requested garment category, and ranks what comes back. Every qualifying product stays reachable through the tiers and Load more."}</p>{connected ? <button className="primary-button" onClick={() => void loadCatalogue(query)}>Search live stores <Icon name="arrow" /></button> : <button className="primary-button" onClick={() => setShowApproval(true)}>Connect once <Icon name="arrow" /></button>}<small>For the on-site experience, load the extension and open any compatible Shopify store.</small></section>}
         </section>
       </main>}
-      <footer><span>Fashion Passport</span><p>Your taste travels. Your data doesn’t.</p><div>Built for the WebMCP Challenge · 2026</div></footer>
+      <footer><span>Fashion Passport</span><p>Your taste travels. Your data doesn’t.</p><button onClick={() => setView("privacy")}>Privacy &amp; permissions</button><div>Built for the WebMCP Challenge · 2026</div></footer>
       {showApproval && (
         <ApprovalModal profile={profile} onApprove={connectPassport} onClose={() => setShowApproval(false)}/>
       )}
