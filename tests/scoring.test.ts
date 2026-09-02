@@ -16,7 +16,7 @@ test("1. a dresses query keeps only dresses in the category-correct set", () => 
   const ranked = rankProducts([dress, skirt, unknown], { profile: profile(), query: "dresses" });
   const correct = categoryCorrect(ranked, "dresses");
   assert.deepEqual(correct.map((item) => item.name), ["Amie Midi Dress"]);
-  // Category-unknown products stay reachable, they are simply not counted as dresses.
+  // Category-unknown products stay reachable in a separate count.
   assert.ok(ranked.some((item) => item.name === "Amie"));
 });
 
@@ -37,7 +37,7 @@ test("3. over the usual profile budget is a soft penalty, strict mode holds", ()
   assert.equal(strict.state, "held");
 });
 
-test("4. Avoid: Polyester never hides a product by itself", () => {
+test("4. Avoid keeps a polyester product eligible", () => {
   const item = makeProduct({ title: "Midi Dress", description: "Made from recycled polyester." });
   const scored = scoreProduct(item, { profile: profile(), query: "dresses" });
   assert.equal(scored.evidence.material.value, "Polyester");
@@ -46,7 +46,7 @@ test("4. Avoid: Polyester never hides a product by itself", () => {
   assert.ok(scored.conflicts.some((reason) => reason.label === "Polyester"));
 });
 
-test("5. Never: Polyester holds a confirmed polyester product", () => {
+test("5. Never holds a confirmed polyester product", () => {
   const item = makeProduct({ title: "Midi Dress", description: "Made from recycled polyester." });
   const strictProfile = profile();
   strictProfile.materials = { love: [], avoid: [], never: ["Polyester"] };
@@ -55,7 +55,7 @@ test("5. Never: Polyester holds a confirmed polyester product", () => {
   assert.match(scored.hardRules[0].label, /never list/);
 });
 
-test("6. confirmed unavailable size holds, unknown size data does not", () => {
+test("6. confirmed unavailable size holds while unknown size stays eligible", () => {
   const soldOut = makeProduct({
     title: "Midi Dress",
     variants: [{ available: true, options: [{ name: "Size", value: "16" }] }],
@@ -76,7 +76,7 @@ test("7. unknown attributes add no positive score and stay in other", () => {
   assert.equal(scoreLabel(scored), "Possible match · limited product information");
 });
 
-test("8. a variant colour does not inherit every other available colour", () => {
+test("8. a selected variant colour stays separate from alternative colourways", () => {
   const item = makeProduct({
     title: "Amie Midi Dress",
     variantOptions: [{ name: "Colour", value: "Navy" }],
@@ -89,7 +89,7 @@ test("8. a variant colour does not inherit every other available colour", () => 
   assert.equal(scored.conflicts.length, 0);
 });
 
-test("9. results do not all saturate at the same score", () => {
+test("9. results retain a meaningful score spread", () => {
   const items = [
     makeProduct({ title: "Navy Halterneck Amie Midi Dress", tags: ["colour:navy", "neckline:halterneck"] }),
     makeProduct({ title: "Grey Boxy Midi Dress", tags: ["colour:grey", "dress-style:shift"] }),
@@ -100,7 +100,7 @@ test("9. results do not all saturate at the same score", () => {
   assert.equal(new Set(scores).size > 1, true, "scores must spread, not saturate");
 });
 
-test("10. equal scores fall back to the specified tie-breaks, not API order", () => {
+test("10. equal scores use tie-breaks independent of API order", () => {
   const richer = makeProduct({
     title: "Camel A-line Midi Dress",
     tags: ["colour:camel", "dress-style:a-line dresses", "neckline:square neck", "sleeve-length:long sleeve", "fabric-group:linen"],
@@ -112,7 +112,7 @@ test("10. equal scores fall back to the specified tie-breaks, not API order", ()
   assert.equal(order[0].name, "Camel A-line Midi Dress");
 });
 
-test("named regression case: the Amie halterneck is never held for an avoided polyester", () => {
+test("named regression case keeps the Amie halterneck eligible when polyester is Avoid", () => {
   const item = amieHalterneck();
   assert.equal(item.evidence.neckline.value, "Halter");
   assert.equal(item.evidence.material.value, "Polyester");

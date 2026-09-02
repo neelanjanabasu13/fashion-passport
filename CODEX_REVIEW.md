@@ -16,7 +16,7 @@ The bundle history is valid and is now pushed to GitHub. Independent checks conf
 
 The following are blocking corrections. Implement them mechanically on `claude/prescriptive-build`, add tests for each code defect, update `CLAUDE_HANDOFF.md`, rerun every gate, and return a new bundle. Do not merge or deploy.
 
-## P0.1 — Retailer extension feedback is non-functional
+## P0.1 , Retailer extension feedback is non-functional
 
 Evidence in `extension/content.js`:
 
@@ -44,7 +44,7 @@ Acceptance test:
 - A subsequent compatible retailer must use the same learned preference.
 - Undo must restore the previous tallies and order.
 
-## P0.2 — The extension still uses the obsolete loose word-count engine
+## P0.2 , The extension still uses the obsolete loose word-count engine
 
 `extension/content.js` does not use the new ontology, evidence model, fixed weights, confidence calculation or deterministic tie-breaks. It still searches one flattened text string and calculates a separate simplified score. Documentation currently claims `extension/content.js` applies the same rules; that is false.
 
@@ -61,7 +61,7 @@ Required correction:
 
 Do not claim engine parity until these tests exist and pass.
 
-## P0.3 — New profile and learned data do not travel into the extension
+## P0.3 , New profile and learned data do not travel into the extension
 
 `syncPassportApp()` reads the legacy key `fashion-passport:learned-avoid`. The new web app writes raw votes to `fashion-passport:taste-votes`. The extension also fails to import grouped `never` preferences and `budgetMode` from the saved profile.
 
@@ -79,7 +79,7 @@ Acceptance test:
 - A new signal created on that retailer is present on the next retailer without a second approval.
 - Explicit `Never: Polyester` holds confirmed polyester; `Avoid: Polyester` does not.
 
-## P0.4 — WebMCP `record_style_signal` still implements the old broken behaviour
+## P0.4 , WebMCP `record_style_signal` still implements the old broken behaviour
 
 In `src/app/page.tsx`, the registered WebMCP tool records only thumbs-down and adds only `item.neckline` to the legacy avoid list. It does not use the raw vote model, does not record thumbs-up, and does not rerank using the same path as the visible UI.
 
@@ -89,7 +89,7 @@ Required correction:
 - Return the learned keys, whether a derived preference changed, and the moved count.
 - Test both reactions and repeated-evidence thresholds.
 
-## P0.5 — Result counts and visible tiers include wrong-category products
+## P0.5 , Result counts and visible tiers include wrong-category products
 
 The screenshot reports:
 
@@ -115,7 +115,7 @@ categoryCorrect = strong + worth + other + heldWithinCategory
 
 Unknown-category products shown under All must be reported separately if present.
 
-## P0.6 — The extension still has a catalogue-page ceiling
+## P0.6 , The extension still has a catalogue-page ceiling
 
 `readFullCatalog()` stops after 12 UCP pages. This can leave hundreds of retailer products unread. Every product returned is reachable, but every qualifying catalogue product is not yet reachable.
 
@@ -128,11 +128,11 @@ Required correction:
 
 The cross-store comparison hub may remain deliberately bounded if it keeps `so far` and `more available` truthful. The on-retailer extension is the core proof and must be able to reach the catalogue end.
 
-## P1.1 — Remove the remaining arbitrary-product copy
+## P1.1 , Remove the remaining arbitrary-product copy
 
 `src/app/page.tsx` still says the hub `shows the best 30`. The UI now uses progressive loading and does not stop at 30. Replace this with truthful copy that says all qualifying results remain accessible.
 
-## P1.2 — Submission screenshots are incorrect
+## P1.2 , Submission screenshots are incorrect
 
 `docs/images/onboarding-desktop-1440.png` and `docs/images/onboarding-mobile-390.png` are byte-for-byte identical. The mobile file is not a mobile capture.
 
@@ -142,7 +142,7 @@ Required correction:
 - Use distinct, correctly labelled desktop and mobile evidence.
 - Verify image dimensions and SHA-256 values differ.
 
-## P1.3 — Documentation contains counts produced by the broken tier calculation
+## P1.3 , Documentation contains counts produced by the broken tier calculation
 
 README and Devpost materials must not retain the current cross-store strong/worth/held figures after P0.5 changes.
 
@@ -153,7 +153,7 @@ Required correction:
 - Do not call wrong-category products `held by your rules`.
 - Do not claim extension learning or engine parity until P0.1–P0.4 pass.
 
-## P1.4 — Clean gate failure
+## P1.4 , Clean gate failure
 
 Remove the trailing whitespace at `src/app/page.tsx:507`, then rerun `git diff --check codex/mvp...HEAD`.
 

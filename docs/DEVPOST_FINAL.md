@@ -1,21 +1,19 @@
-# Fashion Passport — Devpost final copy
+# Fashion Passport Devpost final copy
 
 ## Tagline
 
-One fitting. Every compatible shop. A portable fashion relevance layer that
-combines what suits you with what you love.
+A portable fashion relevance layer that combines what suits you with what you
+love across compatible shops.
 
 ## Inspiration
-
-Every fashion website forgets you.
 
 A shopper who knows she wears a UK 10, avoids polyester, prefers midi lengths
 and stops looking above £100 has to repeat that context at every retailer.
 Retailer profiles are passports valid in only one country. Shopping search also
-rarely understands colour, proportions and silhouette—or the fact that personal
+rarely understands colour, proportions and silhouette, or the fact that personal
 taste must be allowed to overrule every styling rule.
 
-Fashion Passport asks for that judgment once and lets it travel.
+Fashion Passport captures that judgment once and applies it across compatible stores.
 
 ## What it does
 
@@ -26,8 +24,9 @@ Its sub-two-minute “Verdict Book” fitting keeps three sources of truth separ
 2. explicit Love, Avoid and Never choices across seven garment traits;
 3. preference patterns learned from reactions to real retailer products.
 
-The ordering is human by design: preference overrules theory. An ordinary Avoid
-only lowers rank; it never hides a product. One reaction never creates a rule.
+The ordering gives preference greater weight than theory. An ordinary Avoid
+lowers rank while keeping the product visible, and repeated evidence is required
+before reactions create a learned preference.
 
 Once approved, an agent can use the Passport to search live retailer-owned
 Shopify catalogues, enforce the requested garment category, rank every product
@@ -38,14 +37,11 @@ approval.
 
 ## Why WebMCP is essential
 
-This is not AI pasted onto shopping. Portability is the product.
-
-Without a shared tool contract, a cross-retailer Passport means brittle DOM
-scraping or bespoke integrations retailer by retailer. WebMCP lets Fashion
+Portability depends on a shared tool contract. WebMCP lets Fashion
 Passport expose typed tools to the agent while compatible retailers expose
-their own catalogue tools. The agent composes the two safely: obtain approved
-user context, query retailer-owned inventory and return a personal, explainable
-ranking.
+their own catalogue tools. The agent composes the two safely by obtaining
+approved user context, querying retailer-owned inventory and returning a
+personal, explainable ranking.
 
 People and agents do different work together:
 
@@ -82,15 +78,14 @@ lint clean, production-build clean, 36/36 tests, every extension script passing
 
 ## What is working now
 
-- Public Vercel application with no login, paid API or environment secret.
-- Eighteen directly verified fashion retailers as a test panel; runtime
-  discovery means the panel does not define total reach.
-- Truthful counts for catalogue scanned, category-correct and four result tiers.
-- Progressive batches until every qualifying product is reachable.
-- Real product photography everywhere clothing is evaluated.
-- Local reactions that rerank immediately and can be undone.
-- One approval across retailer, category, query and tab changes.
-- Forward migration for legacy saved Passports.
+- The public Vercel application requires no login, paid API or environment secret.
+- The test panel contains eighteen directly verified fashion retailers, while runtime discovery supports additional compatible stores.
+- The interface separates catalogue scanned, category-correct and four result-tier counts.
+- Progressive batches keep every qualifying product reachable.
+- Every clothing evaluation uses real product photography.
+- Local reactions rerank immediately and support Undo.
+- One approval covers retailer, category, query and tab changes.
+- Forward migration preserves legacy saved Passports.
 
 ## Challenges
 
@@ -104,26 +99,23 @@ The second hard problem was parity. An extension that only resembles the web
 ranking is dangerous. The extension now uses one browser engine and the tests
 fail on any difference in evidence, score, tier, hard rule or ordering.
 
-## Accomplishments we are proud of
+## Accomplishments
 
-- A coherent product experience, not just a tool-call proof.
-- The core innovation visibly working on a real retailer’s domain.
-- Every count and product derived live—nothing invented under a retailer name.
-- Soft dislikes stay soft, taste can overrule theory, and one click cannot
-  silently rewrite the user.
-- The Verdict Book visual system makes a context protocol feel like a product a
-  shopper could understand and want to keep.
+- The product combines the WebMCP tool flow with a coherent shopper experience.
+- The extension demonstrates the ranking on a real retailer’s domain.
+- Every count and product comes from live retailer data.
+- Soft dislikes lower rank, personal taste can overrule theory, and repeated evidence is required before learning changes a preference.
+- The Verdict Book visual system makes the context protocol legible to shoppers.
 
 ## What we learned
 
-Open protocols change product strategy. Shopify’s per-store UCP endpoints do
-not provide a global merchant directory, so the honest architecture is a
-runtime travel layer plus a verified comparison panel—not a fictional “all
-Shopify stores” index.
+Shopify’s per-store UCP endpoints provide catalogue access without a global
+merchant directory. The architecture therefore combines runtime store discovery
+with a verified comparison panel and makes the boundaries of each claim visible.
 
-Recommendation quality is also evidence semantics: Unknown is not Good; Avoid
-is not Never; a render batch is not a cap; catalogue scanned is not dresses
-found.
+Recommendation quality depends on precise evidence semantics. Unknown attributes
+add no positive score, Avoid lowers rank, Never can hold a product, render batches
+control presentation, and catalogue-scanned counts remain separate from dress counts.
 
 ## What is next
 

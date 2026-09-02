@@ -1,4 +1,4 @@
-/* The Verdict Book — production visual system ported from the supplied POC. */
+/* The Verdict Book , production visual system ported from the supplied POC. */
 ::selection{background:var(--orange);color:#fff}
 .topbar{height:64px;padding:0 clamp(18px,4vw,56px);background:var(--plaster);border-color:var(--plaster-4);backdrop-filter:none}
 .brand>span{width:25px;height:31px;border-radius:0;background:var(--terra);box-shadow:none;position:relative}

@@ -9,7 +9,7 @@ import { makeProduct } from "./fixtures";
 const halterneck = () =>
   makeProduct({ title: "Amie Midi Dress", tags: ["neckline:halterneck", "colour:camel"] });
 
-test("a single reaction never creates a preference", () => {
+test("a single reaction leaves learned preferences unchanged", () => {
   const learned = recordVote(emptyLearned(), ["neckline:halter"], "down");
   assert.equal(derivePreferences(learned).length, 0, "one vote must not become a rule");
 });
@@ -42,7 +42,7 @@ test("undo reverses the most recent signal", () => {
   assert.equal(derivePreferences(learned).length, 0);
 });
 
-test("a reaction records every known trait, not just the neckline", () => {
+test("a reaction records every known trait across the product", () => {
   const keys = traitKeysForProduct(halterneck().evidence as unknown as Record<string, { value: string }>);
   assert.ok(keys.includes(traitKey("neckline", "Halter")));
   assert.ok(keys.includes(traitKey("colour", "Camel")));
@@ -72,7 +72,7 @@ test("an explicit preference outranks a learned signal", () => {
 
 test("reranking is immediate: the catalogue reorders once a signal exists", () => {
   // A leads on explicit preferences, B is close behind. A halterneck signal
-  // should be enough to swap them, and must not remove either product.
+  // should be enough to swap them while keeping both products eligible.
   const a = makeProduct({
     title: "Camel Halterneck A-line Midi Dress",
     tags: ["colour:camel", "neckline:halterneck", "dress-style:a-line dresses", "length:midi"],
@@ -108,7 +108,7 @@ test("a saved profile migrates forward without losing anything", () => {
   assert.deepEqual(migrated.materials.avoid, ["Polyester"]);
 });
 
-test("a corrupt saved profile falls back rather than throwing", () => {
+test("a corrupt saved profile returns the safe fallback", () => {
   assert.equal(readProfile("{not json", demoProfile).label, demoProfile.label);
   assert.equal(readProfile(null, demoProfile).label, demoProfile.label);
 });

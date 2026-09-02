@@ -1,4 +1,4 @@
-# Fashion Passport — Prescriptive Build Specification
+# Fashion Passport , Prescriptive Build Specification
 
 Status: authoritative implementation handoff  
 Owner of product decisions: Neelanjana Basu  
@@ -141,7 +141,7 @@ Current scope: womenswear. Menswear must be visibly labelled `Coming soon` and m
 7. Do not treat ordinary dislikes as absolute exclusions.
 8. Personal taste has more influence than styling theory.
 9. Unknown product attributes are neutral, not positive evidence.
-10. A score is not confidence. Report extraction confidence separately.
+10. Report score and extraction confidence as separate measures.
 11. Product feedback must genuinely update subsequent rankings.
 12. After onboarding, the shopper must never need to maintain the profile manually.
 13. One connection applies across compatible retailers, tabs, categories and queries until revoked.
@@ -371,7 +371,7 @@ A product is `held` only when at least one of these is confirmed:
 4. The product matches an explicit `never` trait.
 5. `budgetMode` is `strict` and the product exceeds the profile budget.
 
-Unknown size availability is not a hard block. The profile's usual budget is not a hard block. Ordinary `avoid` traits are not hard blocks.
+Unknown size availability remains eligible for ranking. The profile's usual budget and ordinary `avoid` traits apply soft penalties.
 
 ### Stage 3: match score
 
@@ -508,9 +508,9 @@ Do not force the user to answer every category.
 
 The resulting Passport must show three layers separately:
 
-1. `Likely to suit you` — theory foundation.
-2. `What you chose` — explicit Love/Avoid/Never.
-3. `Learning as you shop` — learned traits with confidence and interaction count.
+1. `Likely to suit you` , theory foundation.
+2. `What you chose` , explicit Love/Avoid/Never.
+3. `Learning as you shop` , learned traits with confidence and interaction count.
 
 The supplied colour swatch book is one section of the Passport, not the entire Passport. Add sections/cards for fit, neckline, sleeves/length, materials/patterns and hard rules.
 
@@ -722,7 +722,7 @@ Expected treatment with the current demo profile:
 
 Complete in order. Commit after each workstream.
 
-### Commit 1 — data model and ranking
+### Commit 1 , data model and ranking
 
 Suggested message:
 
@@ -738,7 +738,7 @@ Deliver:
 - Category gate, hard rules, scoring, tiers and deterministic sorting.
 - Unit/fixture tests using Node's built-in test runner or an equivalently lightweight test setup. Do not introduce a large test framework solely for this.
 
-### Commit 2 — onboarding and Passport design
+### Commit 2 , onboarding and Passport design
 
 Suggested message:
 
@@ -755,7 +755,7 @@ Deliver:
 - Multidimensional Passport with theory, explicit and learned layers.
 - Mobile and accessibility treatment.
 
-### Commit 3 — complete retailer experience
+### Commit 3 , complete retailer experience
 
 Suggested message:
 
@@ -772,7 +772,7 @@ Deliver:
 - Cross-retailer local signal persistence.
 - Extension version increment.
 
-### Commit 4 — verification and submission artifacts
+### Commit 4 , verification and submission artifacts
 
 Suggested message:
 
@@ -845,7 +845,7 @@ READY FOR CODEX REVIEW
 or:
 
 ```text
-NOT READY FOR REVIEW — BLOCKERS LISTED ABOVE
+NOT READY FOR REVIEW , BLOCKERS LISTED ABOVE
 ```
 
 ---

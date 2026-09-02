@@ -55,7 +55,7 @@
 
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[char]);
   const safeUrl = (value) => { try { const url = new URL(value, location.origin); return url.protocol === "https:" ? url.href : ""; } catch { return ""; } };
-  const merchantName = () => document.querySelector('meta[property="og:site_name"]')?.content?.trim() || document.title.split(/[|–—]/)[0].trim() || host;
+  const merchantName = () => document.querySelector('meta[property="og:site_name"]')?.content?.trim() || document.title.split(/[|–\u2014]/)[0].trim() || host;
   const queryFromPage = () => {
     const heading = document.querySelector("h1")?.textContent?.trim();
     if (heading && heading.length < 70 && /dress|skirt|top|trouser|jean|jumpsuit|clothing|women|occasion|new|sale/i.test(heading)) return heading;
@@ -119,7 +119,7 @@
   const showApproval = () => {
     document.getElementById("fashion-passport-consent")?.remove();
     const modal = document.createElement("div"); modal.id = "fashion-passport-consent";
-    modal.innerHTML = `<div class="fp-consent-card"><button class="fp-close" aria-label="Close">×</button><div class="fp-passport">▣</div><p class="fp-kicker">Official Shopify connection detected</p><h2>Connect Fashion Passport once?</h2><p>This single approval applies your Passport on compatible Shopify stores, including ${escapeHtml(retailerName)}, without asking again for every shop or category. Browsing history stays in this browser.</p><dl><div><dt>Size &amp; fit</dt><dd>${escapeHtml(profile.size)} · ${escapeHtml(String(profile.heightCm))} cm</dd></div><div><dt>Style context</dt><dd>${escapeHtml(profile.colourSeason)} · ${escapeHtml(profile.bodyShape)}</dd></div><div><dt>Taste &amp; limits</dt><dd>Colours, cuts, fabric · £${escapeHtml(String(profile.budget))} ${escapeHtml(profile.budgetMode)}</dd></div></dl><button class="fp-allow">Connect once →</button><button class="fp-not-now">Not now</button><small>${escapeHtml(endpoint)}</small></div>`;
+    modal.innerHTML = `<div class="fp-consent-card"><button class="fp-close" aria-label="Close">×</button><div class="fp-passport">▣</div><p class="fp-kicker">Official Shopify connection detected</p><h2>Connect Fashion Passport once?</h2><p>This single approval applies your Passport on compatible Shopify stores, including ${escapeHtml(retailerName)}, across shops and categories while browsing history stays in this browser.</p><dl><div><dt>Size &amp; fit</dt><dd>${escapeHtml(profile.size)} · ${escapeHtml(String(profile.heightCm))} cm</dd></div><div><dt>Style context</dt><dd>${escapeHtml(profile.colourSeason)} · ${escapeHtml(profile.bodyShape)}</dd></div><div><dt>Taste &amp; limits</dt><dd>Colours, cuts, fabric · £${escapeHtml(String(profile.budget))} ${escapeHtml(profile.budgetMode)}</dd></div></dl><button class="fp-allow">Connect once →</button><button class="fp-not-now">Not now</button><small>${escapeHtml(endpoint)}</small></div>`;
     document.documentElement.appendChild(modal);
     modal.querySelector(".fp-close").addEventListener("click", () => modal.remove());
     modal.querySelector(".fp-not-now").addEventListener("click", () => modal.remove());
@@ -167,7 +167,7 @@
       + `<div class="fp-result-summary"><strong>${scannedLabel}</strong> catalogue products scanned · ${categoryLine}<br>${counts.strong} strong · ${counts.worth} worth a look · ${counts.other} other · ${counts.held} held by your rules</div>`
       + `<nav class="fp-tiers">${tiers.map(([key, label, count]) => `<button data-tier="${key}" class="${panelTier === key ? "is-on" : ""}">${escapeHtml(label)} <i>${count}</i></button>`).join("")}</nav>`
       + (lastReaction ? `<div class="fp-learned"><span>Passport learned: ${escapeHtml(lastReaction.label)}.${lastReaction.moved > 0 ? ` ${lastReaction.moved} ${lastReaction.moved === 1 ? "product" : "products"} moved.` : " It takes repeated evidence to change the order."}</span><button class="fp-undo">Undo</button>${lastReaction.options.length ? `<div class="fp-reasons"><em>${lastReaction.direction === "up" ? "What worked?" : "What put you off?"}</em>${lastReaction.options.map((option) => `<button class="fp-reason" data-key="${escapeHtml(option.key)}">${escapeHtml(option.value)}</button>`).join("")}<button class="fp-reason fp-reason-skip">Skip</button></div>` : ""}</div>` : "")
-      + `<div class="fp-results-grid">${cards || `<p class="fp-empty">Nothing in this tier. Try another tier or a broader search.</p>`}</div>`
+      + `<div class="fp-results-grid">${cards || `<p class="fp-empty">This tier is empty, so try another tier or a broader search.</p>`}</div>`
       + (remaining > 0 ? `<button class="fp-load-more">Load ${Math.min(24, remaining)} more · ${remaining} still to see</button>` : "")
       + (!currentScan.complete ? `<button class="fp-scan-more">Keep scanning the catalogue · ${currentScan.pages} pages read</button>` : "")
       + `<footer>${currentScan.pages} catalogue ${currentScan.pages === 1 ? "page" : "pages"} read${currentScan.complete ? " · catalogue complete" : " · more available"} · retailer-owned products</footer>`;
@@ -304,7 +304,7 @@
       renderPanel(query);
     } catch (error) {
       renderPill("Connection needs retry");
-      showToast(`Could not continue this catalogue: ${error instanceof Error ? error.message : "unknown error"}`);
+      showToast(`The catalogue could not continue because ${error instanceof Error ? error.message : "an unknown error occurred"}`);
     }
   };
 
@@ -332,7 +332,7 @@
       showToast(`${partition.counts.categoryCorrect} ranked from ${currentScan.complete ? currentScan.scanned : `${currentScan.scanned} so far`} scanned`);
     } catch (error) {
       renderPill("Connection needs retry");
-      showToast(`Could not read this catalogue: ${error instanceof Error ? error.message : "unknown error"}`);
+      showToast(`The catalogue could not be read because ${error instanceof Error ? error.message : "an unknown error occurred"}`);
     }
   };
 

@@ -23,7 +23,7 @@
     const tools = [
       {
         name: "get_fashion_passport", title: "Read Fashion Passport",
-        description: "Returns the shopper's portable fashion profile only after the one-time Fashion Passport connection. Explicit taste overrides styling theory.",
+        description: "Returns the shopper's portable fashion profile after the one-time Fashion Passport connection, with explicit taste weighted above styling theory.",
         inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true },
         execute: async () => approved() ? { status: "connected", profile, retailer: location.hostname, privacy: { photosRetained: false, browsingSignals: "local-only" } } : { status: "connection_required", retailer: location.hostname }
       },

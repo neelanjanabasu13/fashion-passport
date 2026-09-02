@@ -70,7 +70,7 @@ UCP product
 `extension/fashion-engine.js` and fails if they disagree on any score, state,
 tier, hard rule, ordering or learned threshold.
 
-## Why the ontology maps rather than hard-codes
+## Retailer-independent ontology mapping
 
 Retailers publish attributes under their own namespaces. Nobody's Child
 publishes `neckline:halterneck` and `fabric-group:jersey`. Jigsaw publishes

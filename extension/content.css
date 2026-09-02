@@ -27,7 +27,7 @@
 .fp-result-card li.fp-conflict{color:#8a6a44!important}.fp-result-card li.fp-conflict:before{content:'!'!important;color:#b5873f!important}
 .fp-result-card li.fp-hard{color:#8a4b42!important}.fp-result-card li.fp-hard:before{content:'\2715'!important;color:#8a4b42!important}
 
-/* Product tiers must scroll; flexbox must never compress many cards into strips. */
+/* Product tiers scroll so flexbox preserves the full card height. */
 .fp-results-grid{grid-template-columns:1fr!important;grid-auto-rows:max-content!important;align-content:start!important;flex:1 1 auto!important;min-height:0!important;gap:12px!important}
 .fp-result-card{min-height:365px!important;flex:none!important}
 .fp-result-card img{height:245px!important}

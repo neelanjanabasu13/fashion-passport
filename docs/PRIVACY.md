@@ -11,9 +11,9 @@
 | Which products were shown or skipped | `localStorage` / `chrome.storage.local` | Never |
 | The one-time connection approval | `chrome.storage.local` | Never |
 
-There is no Fashion Passport server. The Next.js routes are stateless: they
-forward a search to the retailer's own endpoint and return the response. No
-account, no database, no analytics.
+Fashion Passport uses stateless Next.js routes that forward a search to the
+retailer's own endpoint and return the response. The demonstrator has no
+account system, database or analytics service.
 
 ## The single approval
 
@@ -27,14 +27,14 @@ until it is revoked from Privacy.
 
 ## What a retailer receives
 
-Only the derived profile needed to rank: shape, colouring, size, budget and
-the stated trait preferences. Raw reactions are not included. Browsing history
-is not included and is never transmitted anywhere.
+The retailer receives the derived shape, colouring, size, budget and stated
+trait preferences needed for ranking. Raw reactions and browsing history remain
+in the browser.
 
 ## Photographs
 
-The onboarding never asks for a photograph. Nothing is uploaded and nothing is
-stored. If a photo path is added later, the specification requires the image to
+The current onboarding asks for no photograph, so it uploads and stores no image.
+If a photo path is added later, the specification requires the image to
 be processed in the moment, reduced to derived values, and deleted immediately.
 
 ## Revoking

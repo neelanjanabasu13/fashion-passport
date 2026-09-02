@@ -1,6 +1,6 @@
 # Fashion Passport
 
-**Your size, taste and what truly suits you—working together on every fashion site.**
+**Your size, taste and suitability working together across compatible fashion stores.**
 
 Live demonstrator: **[fashion-passport.vercel.app](https://fashion-passport.vercel.app)**
 
@@ -10,9 +10,9 @@ Live demonstrator: **[fashion-passport.vercel.app](https://fashion-passport.verc
 
 Fashion Passport is a portable personal relevance layer for fashion shopping. A shopper connects the Passport once; it can then filter and rerank compatible retailer products using hard constraints, explicit taste, learned feedback, and optional styling theory.
 
-The central rule is deliberately human: **personal preference always overrules colour-season or body-shape theory**.
+The central rule gives **personal preference greater weight than colour-season or body-shape theory**.
 
-The product is presented as a **Verdict Book** rather than another preference dashboard: a tactile fitting-room journey leads into a bound Passport, then the same visual language appears on live retailer results and inside the Chrome extension. Every garment a shopper judges is a real retailer-hosted product image.
+The product uses a **Verdict Book** interface. A tactile fitting-room journey leads into a bound Passport, and the same visual language continues through live retailer results and the Chrome extension. Every garment a shopper judges uses a real retailer-hosted product image.
 
 ## Why this exists
 
@@ -21,7 +21,7 @@ Online fashion shopping repeatedly loses context:
 - Every new retailer makes the shopper reselect size, budget, fabric, colour and fit filters.
 - Retailer profiles are trapped inside individual stores.
 - Search results rarely account for body proportions or complexion.
-- Generic relevance answers “does this match the query?”, not “is this unusually suitable for this person?”
+- Generic relevance evaluates the query, while Fashion Passport adds personal suitability.
 
 Fashion Passport makes that context portable.
 
@@ -29,14 +29,14 @@ Fashion Passport makes that context portable.
 
 The repository contains two complementary surfaces:
 
-1. **Next.js Passport office** — a sub-two-minute Womenswear onboarding, the Travel launcher and a secondary live multi-store comparison. Onboarding first derives a transparent body-proportion and colouring foundation, then anonymously retrieves distinct garments across the full verified retailer panel and prioritises those matching that analysis for 20 rapid preference reactions. If the shopper dislikes more than half, the deck automatically broadens. Menswear is explicitly marked coming soon; no cartoon garments or profile sharing with retailers are involved.
-2. **Chrome extension** — the primary portability proof. It discovers the current store's official Shopify UCP endpoint at runtime, stays invisible on unsupported sites and opens an on-store panel of real ranked products. The one-time site approval synchronises into extension storage, so the Passport follows the user to the next compatible store without another prompt.
+1. **Next.js Passport office.** The app provides sub-two-minute Womenswear onboarding, a store launcher and a live multi-store comparison. Onboarding derives a transparent body-proportion and colouring foundation, then retrieves distinct garments anonymously from the verified retailer panel and prioritises them for 20 rapid preference reactions. The deck broadens when the shopper dislikes more than half. Menswear is marked Coming soon. All evaluation screens use real product images, and profile sharing requires approval.
+2. **Chrome extension.** The extension provides the primary portability proof. It discovers the current store's official Shopify UCP endpoint at runtime, stays hidden on unsupported sites and opens an on-store panel of real ranked products. One approval synchronises into extension storage, allowing the Passport to work at the next compatible store without another prompt.
 
 The web demonstrator searches an 18-store directly verified **test panel** with one adapter. Measured on 2 September 2026 with the query "dresses under £100": 1,117 catalogue products scanned across 18 responding stores, 1,002 dresses found, 71 strong matches, 170 worth a look, 106 other and 655 held by the profile's own rules, with a further 14 products whose category could not be established shown separately under All products.
 
 Against Nobody's Child alone with the query "dresses", the catalogue was read to exhaustion: 1,000 products scanned across 25 cursor pages with no pages remaining, 980 dresses found, 382 strong, 299 worth a look, 77 other and 222 held. Zero wrong-category products were admitted to the claimed dress set. Scores ranged from 29 to 99 across 71 distinct values.
 
-This panel proves the adapter; it does not define its reach. Store mode accepts any store the user chooses and the extension discovers compatibility at runtime. Searching every Shopify store at once would require a merchant directory and a global index; Shopify exposes per-store endpoints, not a public global catalogue endpoint. No paid API, product feed, licensed styling database or retained photo is required.
+The verified panel demonstrates the adapter across 18 stores. Store mode also accepts a store chosen by the user and discovers compatibility at runtime. A simultaneous search across every Shopify store would require a merchant directory and global index because Shopify exposes per-store endpoints without a public global catalogue endpoint. The demonstrator works without a paid API, product feed, licensed styling database or retained photo.
 
 ### WebMCP tools
 
@@ -94,7 +94,7 @@ node --check extension/popup.js
 2. Enable **Developer mode**.
 3. Select **Load unpacked**.
 4. Choose this repository’s `extension` directory.
-5. Reload the extension after code updates (the final build is **v0.8.0**), then click its toolbar icon to open the Jigsaw → Lucy & Yak travel demo.
+5. Reload the extension after code updates. The current build is **v0.8.2**. Click its toolbar icon to open the Jigsaw → Lucy & Yak store demonstration.
 6. Fashion Passport anonymously checks for the standard UCP tools. It renders nothing if the endpoint is absent.
 7. Select the Fashion Passport control and review exactly what will be shared. This is the single connection prompt; subsequent compatible stores and category changes do not ask again.
 8. The extension follows the retailer's official catalogue cursors in pages of up to 250, deduplicates the response, and opens an on-site ranked results panel. The panel distinguishes the top products shown, category-relevant products ranked and complete live catalogue products scanned; it never presents one API page as the retailer's total.
@@ -109,7 +109,7 @@ Live verified retailers as of 2 September 2026 include Jigsaw, Lucy & Yak, Oh Po
 
 The standalone app and extension never invent inventory under a retailer’s name. Both call `https://{retailer-domain}/api/ucp/mcp`, use Shopify's current `search_catalog` contract, enforce the requested garment category after retrieval, and display retailer-hosted images and links. The extension requests broad HTTPS host access because compatibility is discovered at runtime; before the one-time connection it sends only an anonymous `tools/list` capability check to the origin currently being visited. The full Passport is transmitted only after visible approval.
 
-Retailer themes and markup can change without requiring selector maintenance because the extension consumes the shared protocol rather than scraping product cards.
+The extension consumes the shared protocol, which avoids retailer-specific product-card selectors when themes and markup change.
 
 ## Privacy model
 
@@ -126,7 +126,7 @@ The transparent rules engine lives in [`src/lib/scoring.ts`](src/lib/scoring.ts)
 
 1. hard constraints: explicit `Never`, a hard query price cap, confirmed size unavailability and strict budget mode;
 2. explicit likes and dislikes;
-3. learned local feedback, promoted only after repeated evidence rather than one overconfident thumbs-down;
+3. learned local feedback, promoted after repeated evidence across several reactions;
 4. lower-weight colour-season and body-shape guidance.
 
 This ordering is intentional. The demo profile is Deep Winter but loves burnt orange, terracotta and camel, so those colours remain prioritised. It dislikes grey, so grey is penalised even though some greys may suit Winter palettes.
@@ -157,18 +157,17 @@ Supabase is not required for the prize demonstrator. It can later provide opt-in
 
 ## Open foundations
 
-The production path is designed to map onto open garment and commerce vocabularies rather than inventing a proprietary ontology:
+The production path maps onto open garment and commerce vocabularies:
 
-- [Shopify Standard Product Taxonomy](https://github.com/Shopify/product-taxonomy) — MIT
-- [Fashionpedia](https://fashionpedia.github.io/home/) — CC BY 4.0
-- [MediaPipe](https://github.com/google-ai-edge/mediapipe) — Apache 2.0
+- [Shopify Standard Product Taxonomy](https://github.com/Shopify/product-taxonomy), MIT
+- [Fashionpedia](https://fashionpedia.github.io/home/), CC BY 4.0
+- [MediaPipe](https://github.com/google-ai-edge/mediapipe), Apache 2.0
 
 The current demonstrator keeps its compact vocabulary in the repository so it remains deterministic, free and easy to judge.
 
 ## Scope
 
-Womenswear only. Menswear is labelled `Coming soon` and does not pretend to
-work.
+The current demonstrator supports Womenswear. Menswear is labelled `Coming soon` while its guidance model is developed and tested.
 
 ## Status
 

@@ -27,7 +27,7 @@ No commit was amended. Nothing was force-pushed, merged or deployed.
 
 ## 2. How each finding was corrected
 
-### P0.1 — extension feedback was non-functional
+### P0.1 , extension feedback was non-functional
 
 `extension/content.js` now records raw `{up, down, updatedAt}` tallies in
 `chrome.storage.local` under `fashion-passport:taste-votes`, with the same
@@ -50,7 +50,7 @@ Tests: parity of tallies, thresholds, confidence and undo against `src/lib`;
 both reactions recording every trait; four reactions demoting a matching
 product in the extension's own ranking without removing it.
 
-### P0.2 — the extension used an obsolete word-count engine
+### P0.2 , the extension used an obsolete word-count engine
 
 Added `extension/fashion-engine.js`, a self-contained script exposing
 `globalThis.FashionEngine`, loaded before `content.js` and loadable as a
@@ -74,7 +74,7 @@ query cap and a confirmed sold-out size all hold correctly in the extension.
 queries and fails on any disagreement in score, state, confidence, hard-rule
 count or ordering.
 
-### P0.3 — profile and learned data did not travel
+### P0.3 , profile and learned data did not travel
 
 `syncPassportApp()` now syncs the complete migrated `FashionProfile`, including
 every `never` group and `budgetMode`, plus the raw `fashion-passport:taste-votes`
@@ -83,14 +83,14 @@ deleted. The extension listens for `fashion-passport:learned-changed` and for
 storage events, so later learning keeps flowing. Legacy flat signals are still
 imported and converted rather than discarded.
 
-### P0.4 — WebMCP `record_style_signal` used the broken path
+### P0.4 , WebMCP `record_style_signal` used the broken path
 
 The tool and the visible product card now call one function, `applyReaction`.
 It records both reactions through `traitKeysForProduct` and `recordVote`,
 persists, reranks and measures the moved count. The tool returns the learned
 keys, whether a derived preference actually changed, and the moved count.
 
-### P0.5 — counts and tiers included wrong-category products
+### P0.5 , counts and tiers included wrong-category products
 
 Added `partitionResults()`. Every visible figure now comes from one set:
 
@@ -107,7 +107,7 @@ The scale of the original defect, measured live: at Jigsaw, 96 of 200 products
 returned for a dresses query are not dresses. Every one of them was previously
 counted as "held by your rules".
 
-### P0.6 — the extension had a catalogue ceiling
+### P0.6 , the extension had a catalogue ceiling
 
 `readFullCatalog`'s ceiling of 12 pages is replaced by `readCatalogFrom`, which
 follows the cursor to exhaustion with a defensive ceiling of 200 pages. If that
@@ -119,16 +119,16 @@ enlarged set. No total is displayed while `has_next_page` is true.
 Verified live: Nobody's Child now reads to exhaustion, 1,000 products across 25
 pages, `more pages remaining: false`.
 
-### P1.1 — arbitrary-product copy
+### P1.1 , arbitrary-product copy
 
 "shows the best 30" replaced with copy stating that every qualifying product
 stays reachable through the tiers and Load more.
 
-### P1.2 — screenshots
+### P1.2 , screenshots
 
 See section 7. The cause was worse than reported.
 
-### P1.3 — documentation counts
+### P1.3 , documentation counts
 
 Every measured figure in `README.md`, `docs/DEVPOST_DRAFT.md`, `docs/DEMO.md`
 and `docs/ARCHITECTURE.md` now comes from the single verification run in
@@ -136,7 +136,7 @@ section 4, taken after the P0.5 fix. Wrong-category products are no longer
 described as held. No claim of extension learning or engine parity is made
 anywhere without the tests that back it.
 
-### P1.4 — clean gate
+### P1.4 , clean gate
 
 Trailing whitespace removed from `src/app/page.tsx`. `git diff --check` reports
 only two trailing-whitespace markers inside `CODEX_REVIEW.md` itself, which are
@@ -303,4 +303,4 @@ No deployment occurred. No merge occurred. No credential was written, printed or
 committed. No commit was amended and no branch was force-pushed. `codex/mvp` and
 `main` are untouched.
 
-NOT READY FOR REVIEW — BLOCKERS LISTED ABOVE
+NOT READY FOR REVIEW , BLOCKERS LISTED ABOVE

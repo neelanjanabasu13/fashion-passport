@@ -75,7 +75,7 @@ test("P0.2 the named regression case behaves identically in the extension", () =
   assert.ok(theirs.conflicts.some((r: { label: string }) => r.label === "Polyester"));
 });
 
-test("P0.2 hard rules work in the extension: never, strict budget, query cap, sold-out size", () => {
+test("P0.2 extension hard rules cover Never, strict budget, query cap and sold-out size", () => {
   const polyester = makeProduct({ title: "Midi Dress", description: "Made from recycled polyester." });
   const never = normaliseProfile(demoProfile);
   never.materials = { love: [], avoid: [], never: ["Polyester"] };
@@ -177,7 +177,7 @@ test("P0.5 tier counts add up, in both implementations", () => {
     );
   }
   assert.deepEqual(theirs.counts, mine.counts, "both implementations report the same counts");
-  // A skirt asked for under a dresses query is gated out, not held.
+  // A dresses query removes a skirt during the category gate.
   assert.ok(mine.wrongCategory.some((item) => item.name === "Cord Midi Skirt"));
   assert.equal(mine.inCategory.some((item) => item.name === "Cord Midi Skirt"), false);
   assert.equal(mine.counts.held, mine.inCategory.filter((item) => item.state === "held").length);
@@ -209,7 +209,7 @@ test("P0.3 a learned negative made in the app is applied by the extension", () =
   );
 });
 
-test("P0.3 never holds and avoid does not, on the extension's grouped profile", () => {
+test("P0.3 Never holds while Avoid stays eligible on the extension profile", () => {
   const polyester = makeProduct({ title: "Midi Dress", description: "Made from recycled polyester." });
   // budgetMode and every never group must survive the sync.
   const synced = JSON.parse(JSON.stringify(profile));
@@ -225,7 +225,7 @@ test("P0.4 both reactions record, and only repeated evidence crosses the thresho
   const item = makeProduct({ title: "Camel Halterneck Midi Dress", tags: ["colour:camel", "neckline:halterneck", "length:midi"] });
   const keys = traitKeysForProduct(item.evidence as unknown as Record<string, { value: string }>);
 
-  // Thumbs-up must record, which the previous implementation never did.
+  // Thumbs-up records a positive signal through the shared implementation.
   let up = emptyLearned();
   up = recordVote(up, keys, "up");
   assert.equal(Object.keys(up).length, keys.length, "a thumbs-up records every known trait");
@@ -235,7 +235,7 @@ test("P0.4 both reactions record, and only repeated evidence crosses the thresho
   assert.equal(derived.length, keys.length, "two net votes create preferences");
   assert.ok(derived.every((preference) => preference.direction === "positive"));
 
-  // Thumbs-down behaves symmetrically and is not limited to the neckline.
+  // Thumbs-down behaves symmetrically across every known trait.
   let down = emptyLearned();
   down = recordVote(down, keys, "down");
   down = recordVote(down, keys, "down");
@@ -245,7 +245,7 @@ test("P0.4 both reactions record, and only repeated evidence crosses the thresho
   assert.ok(negative.some((preference) => preference.key.startsWith("length:")));
 });
 
-test("P0.4 the moved count is measured against a real rerank, not asserted", () => {
+test("P0.4 the moved count derives from a real rerank", () => {
   const items = [
     makeProduct({ title: "Camel Halterneck A-line Midi Dress", tags: ["colour:camel", "neckline:halterneck", "dress-style:a-line dresses", "length:midi"] }),
     makeProduct({ title: "Navy Square Neck Midi Dress", tags: ["colour:navy", "neckline:square neck", "length:midi"] }),
@@ -257,7 +257,7 @@ test("P0.4 the moved count is measured against a real rerank, not asserted", () 
   const moved = after.reduce((total, id, index) => (before[index] === id ? total : total + 1), 0);
   assert.equal(moved, 2, "both positions changed, and the count reflects it");
 
-  // A single vote must report zero movement rather than claiming an effect.
+  // A single vote reports the measured zero movement.
   const one = recordVote(emptyLearned(), ["neckline:halter"], "down");
   const afterOne = rankProducts(items, { profile, query: "dresses", learned: derivePreferences(one) }).map((item) => item.id);
   assert.deepEqual(afterOne, before, "one vote moves nothing");

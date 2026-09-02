@@ -1,6 +1,6 @@
 /**
- * Suitability foundation. Deliberately the weakest layer in scoring: it is a
- * starting point, not a diagnosis, and explicit taste always outranks it.
+ * Suitability foundation. This lower-weight starting point supports explicit
+ * taste, which receives greater weight in the final score.
  * All values use the canonical ontology labels so they compare cleanly.
  */
 
