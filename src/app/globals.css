@@ -191,6 +191,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .onboarding-panel { width:min(820px,100%); margin:0 auto; background:var(--paper); border:1px solid var(--line); box-shadow:0 25px 70px #4a302019; padding:48px 55px; }
 .onboarding-panel>.eyebrow { justify-content:center; }
 .onboarding-panel h1 { margin:8px 0 17px; text-align:center; font:500 clamp(39px,5vw,61px)/.98 Georgia,serif; letter-spacing:-.045em; }
+.onboarding-panel .intro-headline { white-space:nowrap; font-size:clamp(18px,3.2vw,43px); letter-spacing:-.05em; }
+.heart-cross { display:inline-grid; width:.62em; height:.78em; margin:0 .04em; color:var(--berry); vertical-align:-.08em; }
+.heart-cross svg { width:100%; height:100%; overflow:visible; fill:currentColor; }
 .onboarding-panel>p:not(.eyebrow) { max-width:650px; margin:0 auto 28px; text-align:center; color:var(--muted); font-size:13px; line-height:1.65; }
 .scope-choice { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 .scope-choice button { min-height:125px; text-align:left; background:white; border:1px solid #d9cec4; padding:20px; display:flex; flex-direction:column; cursor:pointer; }
