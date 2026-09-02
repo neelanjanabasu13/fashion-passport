@@ -5,6 +5,7 @@ import type {
   ResultState,
   ScoreReason,
   ScoredProduct,
+  ResultPartition,
   TierCounts,
 } from "./types";
 import { FASHION_DIMENSIONS, type Dimension, requestedCategory } from "./ontology";
@@ -165,25 +166,68 @@ export function rankProducts(items: Product[], context: ScoreContext): ScoredPro
 }
 
 /**
- * Stage 1 category gate. Category-unknown products never enter a claimed
- * category count; they remain reachable under All products.
+ * Stage 1 category gate.
+ *
+ * A request for dresses admits only products classified as dresses. Products
+ * whose category could not be established stay reachable under All products
+ * but never enter a claimed category count. Products of a different, known
+ * category leave the result set entirely: they are not "held by your rules",
+ * because the shopper set no rule about them.
  */
+export function partitionResults(scanned: number, ranked: ScoredProduct[], query: string): ResultPartition {
+  const requested = requestedCategory(query);
+  if (!requested) {
+    return {
+      requested: null,
+      inCategory: ranked,
+      unknownCategory: [],
+      wrongCategory: [],
+      counts: countTiers(scanned, ranked, ranked.length, 0),
+    };
+  }
+  const inCategory: ScoredProduct[] = [];
+  const unknownCategory: ScoredProduct[] = [];
+  const wrongCategory: ScoredProduct[] = [];
+  for (const item of ranked) {
+    const value = item.evidence.category.value;
+    if (value === requested) inCategory.push(item);
+    else if (value === "Unknown") unknownCategory.push(item);
+    else wrongCategory.push(item);
+  }
+  return {
+    requested,
+    inCategory,
+    unknownCategory,
+    wrongCategory,
+    counts: countTiers(scanned, inCategory, inCategory.length, unknownCategory.length),
+  };
+}
+
+function countTiers(scanned: number, items: ScoredProduct[], categoryCorrect: number, unknownCategory: number): TierCounts {
+  return {
+    catalogueScanned: scanned,
+    categoryCorrect,
+    unknownCategory,
+    strong: items.filter((item) => item.state === "strong").length,
+    worth: items.filter((item) => item.state === "worth").length,
+    other: items.filter((item) => item.state === "other").length,
+    held: items.filter((item) => item.state === "held").length,
+  };
+}
+
+/** Retained for callers that only want the category-correct subset. */
 export function categoryCorrect(items: ScoredProduct[], query: string) {
   const wanted = requestedCategory(query);
   if (!wanted) return items;
   return items.filter((item) => item.evidence.category.value === wanted);
 }
 
+/**
+ * Every visible figure comes from one internally consistent set, so
+ * `categoryCorrect === strong + worth + other + held` always holds.
+ */
 export function tierCounts(scanned: number, ranked: ScoredProduct[], query: string): TierCounts {
-  const correct = categoryCorrect(ranked, query);
-  return {
-    catalogueScanned: scanned,
-    categoryCorrect: correct.length,
-    strong: ranked.filter((item) => item.state === "strong").length,
-    worth: ranked.filter((item) => item.state === "worth").length,
-    other: ranked.filter((item) => item.state === "other").length,
-    held: ranked.filter((item) => item.state === "held").length,
-  };
+  return partitionResults(scanned, ranked, query).counts;
 }
 
 /** Low evidence hides the percentage but never the product. */

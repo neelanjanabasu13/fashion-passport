@@ -46,13 +46,23 @@ vocabulary rather than hard-coding a retailer's keys.
 
 ## Verified, on 2 September 2026
 
-- Nobody's Child, query "dresses under £100": 1,115 catalogue products scanned
-  across 18 responding stores, 1,002 dresses found, 71 strong matches, 166
-  worth a look, 765 held. Zero non-dresses admitted to the dress set. Scores
-  spread from 31 to 99 across 57 distinct values.
-- Jigsaw: 200 scanned, 101 category-correct, 0 non-dresses admitted.
-- Every held product was held for one confirmed reason: the shopper's size was
-  sold out.
+- Nobody's Child, query "dresses", catalogue read to exhaustion: 1,000 products
+  scanned across 25 cursor pages with none remaining, 980 dresses found, 382
+  strong matches, 299 worth a look, 77 other, 222 held. Zero wrong-category
+  products admitted. Scores spread from 29 to 99 across 71 distinct values.
+- Jigsaw, same query: 200 scanned, catalogue exhausted, 101 dresses found. The
+  retailer's own search returned 96 products that are not dresses; those are
+  gated out rather than counted against the shopper's rules.
+- Cross-store hub, "dresses under £100": 1,117 scanned across 18 responding
+  stores, 1,002 dresses, 71 strong, 170 worth a look, 106 other, 655 held.
+- In every run `categoryCorrect = strong + worth + other + held` held exactly.
+
+## Not yet proved
+
+The Chrome extension shares one engine with the web app, and a parity test
+suite fails if the two ever disagree on a decision. The unpacked Manifest V3
+flow itself, meaning the single approval, cross-tab persistence and the second
+retailer with no second prompt, has not yet been observed running end to end.
 
 ## Honest limitations
 

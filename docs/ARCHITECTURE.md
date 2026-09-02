@@ -63,7 +63,12 @@ UCP product
 | `src/lib/learned.ts` | Raw up-down tallies, derived preferences, undo. |
 | `src/lib/profile.ts` | Forward migration of saved profiles. |
 | `src/lib/shopify.ts` | UCP transport and cursor pagination. |
-| `extension/content.js` | The same rules applied on the retailer's own page. |
+| `extension/fashion-engine.js` | The same ontology, extraction, scoring, tiering and learned-signal model, as a self-contained script the content script and Node tests both load. |
+| `extension/content.js` | The retailer-page surface. It makes no ranking decisions of its own; every decision comes from the engine. |
+
+`tests/parity.test.ts` runs one corpus through both `src/lib` and
+`extension/fashion-engine.js` and fails if they disagree on any score, state,
+tier, hard rule, ordering or learned threshold.
 
 ## Why the ontology maps rather than hard-codes
 
@@ -74,6 +79,7 @@ publishes `neckline:halterneck` and `fabric-group:jersey`. Jigsaw publishes
 canonical label. Nothing in the pipeline is specific to a single retailer.
 
 This also means attribute coverage varies by retailer, which is why evidence
-confidence is reported separately from the match score. Measured on
-2 September 2026: Nobody's Child returned a known neckline for 95% of dresses,
-Jigsaw for 17%.
+confidence is reported separately from the match score. Measured on 2 September 2026 across each retailer's full dress catalogue:
+Nobody's Child returned a known neckline for 93% of products and reached high
+evidence confidence on 933 of 982; Jigsaw returned a known neckline for 17% and
+reached high confidence on 19 of 200.

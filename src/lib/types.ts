@@ -135,8 +135,18 @@ export type ScoredProduct = Product & {
 export type TierCounts = {
   catalogueScanned: number;
   categoryCorrect: number;
+  /** Products whose category could not be established. Reported separately. */
+  unknownCategory: number;
   strong: number;
   worth: number;
   other: number;
   held: number;
+};
+
+export type ResultPartition = {
+  requested: string | null;
+  inCategory: ScoredProduct[];
+  unknownCategory: ScoredProduct[];
+  wrongCategory: ScoredProduct[];
+  counts: TierCounts;
 };

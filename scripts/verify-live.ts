@@ -7,7 +7,7 @@ import { retailers } from "../src/lib/data";
 import { demoProfile } from "../src/lib/data";
 import { normaliseProfile } from "../src/lib/profile";
 import { walkCatalog } from "../src/lib/shopify";
-import { categoryCorrect, rankProducts, tierCounts } from "../src/lib/scoring";
+import { partitionResults, rankProducts } from "../src/lib/scoring";
 import { FASHION_DIMENSIONS } from "../src/lib/ontology";
 
 const profile = normaliseProfile(demoProfile);
@@ -17,19 +17,23 @@ const retailer = retailers.find((item) => item.id === wanted);
 if (!retailer) throw new Error(`Unknown retailer ${wanted}`);
 
 const started = Date.now();
-const { products, scanned, truncated } = await walkCatalog(retailer, query, profile, 8);
+const pages = Number(process.argv[4] || 200); // exhaust by default, high safety ceiling
+const { products, scanned, truncated } = await walkCatalog(retailer, query, profile, pages);
 const ranked = rankProducts(products, { profile, query });
-const correct = categoryCorrect(ranked, query);
-const counts = tierCounts(scanned, ranked, query);
+const partition = partitionResults(scanned, ranked, query);
+const correct = partition.inCategory;
+const counts = partition.counts;
 
 console.log(`retailer         ${retailer.name}  (${retailer.endpoint})`);
 console.log(`query            "${query}"`);
 console.log(`verified at      ${new Date().toISOString()}  in ${Date.now() - started}ms`);
 console.log(`pagination       ${scanned} scanned, more pages remaining: ${truncated}`);
 console.log(`tiers            scanned ${counts.catalogueScanned} · category-correct ${counts.categoryCorrect} · strong ${counts.strong} · worth ${counts.worth} · other ${counts.other} · held ${counts.held}`);
+const sum = counts.strong + counts.worth + counts.other + counts.held;
+console.log(`invariant        categoryCorrect ${counts.categoryCorrect} === strong+worth+other+held ${sum}  ${counts.categoryCorrect === sum ? "OK" : "FAIL"}`);
+console.log(`gated out        ${partition.wrongCategory.length} wrong-category · ${partition.unknownCategory.length} unknown-category (shown under All products)`);
 
-const wrongCategory = correct.filter((item) => item.evidence.category.value !== "Dress");
-console.log(`category gate    ${wrongCategory.length} non-dresses admitted to the dress set`);
+console.log(`category gate    ${correct.filter((item) => item.evidence.category.value !== partition.requested).length} wrong-category products admitted to the claimed set`);
 
 const known = (item: (typeof ranked)[number]) =>
   FASHION_DIMENSIONS.filter((dimension) => item.evidence[dimension].value !== "Unknown").length;

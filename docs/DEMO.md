@@ -50,8 +50,9 @@ interaction counts.
 ## Fallback retailers
 
 If Nobody's Child is unavailable, use **Jigsaw**, verified 2 September 2026:
-200 catalogue products scanned in 6.2 seconds, 101 category-correct dresses,
-0 non-dresses admitted.
+200 catalogue products scanned to exhaustion in 5.6 seconds, 101 dresses found,
+0 wrong-category products admitted. Jigsaw's own search returns 96 non-dresses
+for a dresses query; they are gated out, not counted as held.
 
 If both are unavailable, **Lucy & Yak** also responds. Do not substitute static
 data; say the endpoint is down and demonstrate on a store that responds.

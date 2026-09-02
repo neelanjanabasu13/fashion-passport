@@ -6,7 +6,7 @@ import { DressArt } from "@/components/dress-art";
 import { Icon } from "@/components/icons";
 import { BodyShapeVisual, ColourSignalVisual, PaletteVisual } from "@/components/profile-visuals";
 import { demoProfile, retailers } from "@/lib/data";
-import { analysisFit, rankProducts, scoreLabel, tierCounts } from "@/lib/scoring";
+import { analysisFit, partitionResults, rankProducts, scoreLabel } from "@/lib/scoring";
 import { derivePreferences, emptyLearned, legacySignalsToPreferences, recordVote, traitKeysForProduct, undoVote } from "@/lib/learned";
 import { SEASONS, theoryFor as seasonTheory } from "@/lib/style-theory";
 import { FASHION_DIMENSIONS, VOCABULARY, pluralCategory, requestedCategory, type Dimension } from "@/lib/ontology";
@@ -447,6 +447,7 @@ export default function Home() {
   const [liveAt, setLiveAt] = useState("");
   const [searchStats, setSearchStats] = useState({ storesQueried: 0, storesResponding: 0, catalogueScanned: 0, moreAvailable: false });
   const stateRef = useRef({ retailerId, connected, learnedAvoid, learnedTaste, liveProducts, profile });
+  const reactionRef = useRef<((item: ScoredProduct, reaction: Reaction) => { keys: string[]; moved: number; label: string; learned: LearnedTaste } | null) | null>(null);
 
   useEffect(() => {
     stateRef.current = { retailerId, connected, learnedAvoid, learnedTaste, liveProducts, profile };
@@ -485,16 +486,20 @@ export default function Home() {
   const retailer = retailers.find((item) => item.id === retailerId);
   const ranked = useMemo(() => rankProducts(retailerId === "all" ? liveProducts : liveProducts.filter((product) => product.retailerId === retailerId), { profile, query, learned: [...derivePreferences(learnedTaste), ...legacySignalsToPreferences(learnedAvoid)] }), [liveProducts, retailerId, learnedAvoid, learnedTaste, profile, query]);
   const applied = passportOn && connected;
-  const counts = useMemo(() => tierCounts(searchStats.catalogueScanned, ranked, query), [ranked, query, searchStats.catalogueScanned]);
+  // One partition feeds every visible figure, so the counts always add up.
+  const partition = useMemo(() => partitionResults(searchStats.catalogueScanned, ranked, query), [ranked, query, searchStats.catalogueScanned]);
+  const counts = partition.counts;
   // Default to Strong matches whenever at least one exists, without writing
   // state from an effect.
   const activeTier: TierView = tier === "strong" && counts.strong === 0 && counts.worth > 0 ? "worth" : tier;
   const tierItems = useMemo(() => {
-    if (!applied) return ranked;
-    if (activeTier === "held") return ranked.filter((item) => item.state === "held");
-    if (activeTier === "all") return ranked.filter((item) => item.state !== "held");
-    return ranked.filter((item) => item.state === activeTier);
-  }, [ranked, activeTier, applied]);
+    if (!applied) return [...partition.inCategory, ...partition.unknownCategory];
+    // Wrong-category products are gated out at Stage 1. They are not held by
+    // any rule the shopper set, so they appear in no tier and no count.
+    if (activeTier === "held") return partition.inCategory.filter((item) => item.state === "held");
+    if (activeTier === "all") return [...partition.inCategory.filter((item) => item.state !== "held"), ...partition.unknownCategory];
+    return partition.inCategory.filter((item) => item.state === activeTier);
+  }, [partition, activeTier, applied]);
   // A render batch only. Every qualifying product stays reachable below.
   const visible = tierItems.slice(0, shown);
   const remaining = Math.max(0, tierItems.length - visible.length);
@@ -504,7 +509,7 @@ export default function Home() {
 
   const loadCatalogue = async (requestText: string) => {
     setShown(RENDER_BATCH);
-    setCatalogueState("loading"); setCatalogueError(""); setLiveProducts([]); 
+    setCatalogueState("loading"); setCatalogueError(""); setLiveProducts([]);
     try {
       const response = await fetch("/api/shopify/search-all", {
         method: "POST",
@@ -597,12 +602,21 @@ export default function Home() {
           execute: async (input: Record<string, unknown>) => {
             const item = stateRef.current.liveProducts.find((p) => p.id === input.productId);
             if (!item) return { status: "not_found" };
-            setReactions((current) => ({ ...current, [item.id]: input.reaction as Reaction }));
-            if (input.reaction === "down") {
-              const next = Array.from(new Set([...stateRef.current.learnedAvoid, item.neckline]));
-              setLearnedAvoid(next); localStorage.setItem(STORE_SIGNALS, JSON.stringify(next));
-            }
-            return { status: "learned", storage: "local-browser", product: item.name };
+            const reaction = input.reaction === "up" ? "up" : "down";
+            const before = derivePreferences(stateRef.current.learnedTaste).length;
+            // Identical path to the visible product card: same trait keys, same
+            // persistence, same reranking, same measured moved count.
+            const outcome = reactionRef.current?.(item as ScoredProduct, reaction) ?? null;
+            if (!outcome) return { status: "no_traits", product: item.name };
+            return {
+              status: "learned",
+              storage: "local-browser",
+              product: item.name,
+              reaction,
+              learnedKeys: outcome.keys,
+              preferenceChanged: derivePreferences(outcome.learned).length !== before,
+              productsMoved: outcome.moved,
+            };
           },
         },
       ];
@@ -618,22 +632,28 @@ export default function Home() {
     document.dispatchEvent(new Event("fashion-passport:connection-changed"));
     setShowApproval(false); setPassportOn(true); if (view === "shop") void loadCatalogue(query);
   };
-  const reactTo = (item: ScoredProduct, reaction: Reaction) => {
-    setReactions((current) => ({ ...current, [item.id]: reaction }));
+  /**
+   * The single reaction path. The product card, the WebMCP tool and any future
+   * caller all go through here, so they cannot diverge.
+   */
+  const applyReaction = (item: ScoredProduct, reaction: Reaction) => {
     const keys = traitKeysForProduct(item.evidence as unknown as Record<string, { value: string }>);
-    if (keys.length === 0) return;
+    if (keys.length === 0) return null;
 
-    const before = rankProducts(ranked, { profile, query, learned: derivePreferences(learnedTaste) }).map((entry) => entry.id);
-    const updated = recordVote(learnedTaste, keys, reaction);
-    const after = rankProducts(ranked, { profile, query, learned: derivePreferences(updated) }).map((entry) => entry.id);
+    const source = stateRef.current.liveProducts.length ? stateRef.current.liveProducts : liveProducts;
+    const currentLearned = stateRef.current.learnedTaste;
+    const activeProfile = stateRef.current.profile;
+    const before = rankProducts(source, { profile: activeProfile, query, learned: derivePreferences(currentLearned) }).map((entry) => entry.id);
+    const updated = recordVote(currentLearned, keys, reaction);
+    const after = rankProducts(source, { profile: activeProfile, query, learned: derivePreferences(updated) }).map((entry) => entry.id);
     const moved = after.reduce((total, id, index) => (before[index] === id ? total : total + 1), 0);
 
     localStorage.setItem(STORE_TASTE_VOTES, JSON.stringify(updated));
     setLearnedTaste(updated);
+    setReactions((current) => ({ ...current, [item.id]: reaction }));
 
-    // Name a trait the signal can actually move. A trait the shopper has
-    // stated explicitly is never affected by learning, so naming it would be
-    // misleading.
+    // Name a trait the signal can actually move. A trait the shopper stated
+    // explicitly is never affected by learning, so naming it would mislead.
     const groupFor: Partial<Record<Dimension, keyof FashionProfile>> = {
       colour: "colours", silhouette: "silhouettes", neckline: "necklines",
       sleeve: "sleeves", length: "lengths", pattern: "patterns", material: "materials",
@@ -643,13 +663,17 @@ export default function Home() {
       if (!value || value === "Unknown") return false;
       const field = groupFor[dimension];
       if (!field) return false;
-      const group = profile[field] as PreferenceGroup;
+      const group = activeProfile[field] as PreferenceGroup;
       return ![...group.love, ...group.avoid, ...group.never].some((entry) => entry.toLowerCase() === value.toLowerCase());
     });
     const named = movable ? (item.evidence as Record<string, { value: string }>)[movable].value : null;
     const label = `${reaction === "up" ? "more" : "less"} ${(named || "like this").toLowerCase()}`;
     setLastLearn({ keys, reaction, label, moved });
+    return { keys, moved, label, learned: updated };
   };
+
+  const reactTo = (item: ScoredProduct, reaction: Reaction) => { applyReaction(item, reaction); };
+  useEffect(() => { reactionRef.current = applyReaction; });
 
   const undoLastLearn = () => {
     if (!lastLearn) return;
@@ -682,12 +706,12 @@ export default function Home() {
           {ranked.length ? <>
             <div className="result-header">
               <p className="result-scanned"><strong>{counts.catalogueScanned.toLocaleString("en-GB")}</strong> catalogue products scanned{searchStats.moreAvailable ? " so far" : ""}{searchStats.storesResponding > 1 ? ` across ${searchStats.storesResponding} live stores` : ""}</p>
-              {requested && <p className="result-category"><strong>{counts.categoryCorrect.toLocaleString("en-GB")}</strong> {counts.categoryCorrect === 1 ? requested.toLowerCase() : pluralCategory(requested)} found</p>}
-              <p className="result-tiers"><strong>{counts.strong}</strong> strong {counts.strong === 1 ? "match" : "matches"} · <strong>{counts.worth}</strong> worth a look · <strong>{counts.held}</strong> held by your rules</p>
+              {requested && <p className="result-category"><strong>{counts.categoryCorrect.toLocaleString("en-GB")}</strong> {counts.categoryCorrect === 1 ? requested.toLowerCase() : pluralCategory(requested)} found{counts.unknownCategory > 0 && <em> · {counts.unknownCategory} more could not be categorised, shown under All products</em>}</p>}
+              <p className="result-tiers"><strong>{counts.strong}</strong> strong {counts.strong === 1 ? "match" : "matches"} · <strong>{counts.worth}</strong> worth a look · <strong>{counts.other}</strong> other · <strong>{counts.held}</strong> held by your rules</p>
             </div>
 
             {applied && <nav className="tier-nav" aria-label="Result tiers">
-              {([["strong", "Strong matches", counts.strong], ["worth", "Worth a look", counts.worth], ["all", "All products", counts.strong + counts.worth + counts.other], ["held", "Held by rules", counts.held]] as [TierView, string, number][]) .map(([key, label, count]) => (
+              {([["strong", "Strong matches", counts.strong], ["worth", "Worth a look", counts.worth], ["all", "All products", counts.strong + counts.worth + counts.other + counts.unknownCategory], ["held", "Held by rules", counts.held]] as [TierView, string, number][]) .map(([key, label, count]) => (
                 <button key={key} className={activeTier === key ? "active" : ""} aria-current={activeTier === key ? "true" : undefined} onClick={() => { setTier(key); setShown(RENDER_BATCH); }}>
                   {label} <span>{count}</span>
                 </button>
@@ -711,7 +735,7 @@ export default function Home() {
               Load {Math.min(RENDER_BATCH, remaining)} more <span>{remaining} still to see in this tier</span>
             </button>}
             {remaining === 0 && tierItems.length > RENDER_BATCH && <p className="tier-complete">That is every product in this tier.</p>}
-          </> : <section className={`live-site-only ${catalogueState === "error" ? "has-error" : ""}`}><div className="live-site-icon"><Icon name={catalogueState === "error" ? "close" : "external"} /></div><p className="eyebrow">{catalogueState === "error" ? "Live connection needs another try" : "Retailer-owned products only"}</p><h2>{catalogueState === "error" ? catalogueError : `Search ${retailers.length} live fashion stores together.`}</h2><p>{catalogueState === "error" ? "No cached or invented products have replaced the retailer response." : "Connect once. Fashion Passport calls every verified retailer-owned Shopify endpoint, enforces the requested garment category, and shows the best 30—not a sea of irrelevant stock."}</p>{connected ? <button className="primary-button" onClick={() => void loadCatalogue(query)}>Search live stores <Icon name="arrow" /></button> : <button className="primary-button" onClick={() => setShowApproval(true)}>Connect once <Icon name="arrow" /></button>}<small>For the on-site experience, load the extension and open any compatible Shopify store.</small></section>}
+          </> : <section className={`live-site-only ${catalogueState === "error" ? "has-error" : ""}`}><div className="live-site-icon"><Icon name={catalogueState === "error" ? "close" : "external"} /></div><p className="eyebrow">{catalogueState === "error" ? "Live connection needs another try" : "Retailer-owned products only"}</p><h2>{catalogueState === "error" ? catalogueError : `Search ${retailers.length} live fashion stores together.`}</h2><p>{catalogueState === "error" ? "No cached or invented products have replaced the retailer response." : "Connect once. Fashion Passport calls every verified retailer-owned Shopify endpoint, enforces the requested garment category, and ranks what comes back. Every qualifying product stays reachable through the tiers and Load more."}</p>{connected ? <button className="primary-button" onClick={() => void loadCatalogue(query)}>Search live stores <Icon name="arrow" /></button> : <button className="primary-button" onClick={() => setShowApproval(true)}>Connect once <Icon name="arrow" /></button>}<small>For the on-site experience, load the extension and open any compatible Shopify store.</small></section>}
         </section>
       </main>}
       <footer><span>Fashion Passport</span><p>Your taste travels. Your data doesn’t.</p><div>Built for the WebMCP Challenge · 2026</div></footer>

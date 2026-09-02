@@ -8,14 +8,38 @@
   const signalKey = "fashion-passport:learned-signals";
   const profileKey = "fashion-passport:profile";
   const agentProfile = "https://shopify.dev/ucp/agent-profiles/examples/2026-08-25/valid-with-capabilities.json";
+  const votesKey = "fashion-passport:taste-votes";
+  const FE = globalThis.FashionEngine;
+
+  /**
+   * The full migrated FashionProfile, not a flattened love/avoid pair.
+   * Every `never` group and `budgetMode` travel, because only those can hold
+   * a product. Overwritten by whatever the Passport app has saved.
+   */
+  const emptyGroup = () => ({ love: [], avoid: [], never: [] });
   let profile = {
-    size: "UK 10", heightCm: 163, budget: 100, season: "Deep Winter", shape: "Inverted triangle",
-    love: ["red", "ruby", "burgundy", "pink", "jewel", "navy", "emerald", "camel", "orange", "terracotta", "a-line", "fit and flare", "flowy", "square neck", "boat neck", "scoop neck", "midi", "silk", "linen", "cotton", "chiffon", "ditsy", "gingham", "plaid"],
-    avoid: ["polyester", "boxy", "structured", "cowl", "cap sleeve", "olive", "grey", "gray", "taupe", "animal print", "leopard", "snake print"],
-    // Only `never` can hold a product. An ordinary avoid ranks it lower and
-    // leaves it visible. Mirrors src/lib/scoring.ts, which is the source of truth.
-    never: [],
-    budgetMode: "usual"
+    label: "My Fashion Passport", country: "UK", size: "UK 10", heightCm: 163,
+    colourSeason: "Deep Winter", bodyShape: "Inverted triangle", budget: 100, budgetMode: "usual",
+    colours: { love: ["Red", "Burnt orange", "Terracotta", "Navy", "Dark pink", "Camel"], avoid: ["Olive", "Grey", "Taupe"], never: [] },
+    silhouettes: { love: ["Flowy", "A-line", "Fit and flare"], avoid: ["Shift/boxy", "Tailored/structured"], never: [] },
+    necklines: { love: ["Square", "Boat/bateau", "Scoop"], avoid: ["Cowl"], never: [] },
+    sleeves: { love: ["Long", "3/4", "Sleeveless"], avoid: ["Cap"], never: [] },
+    patterns: { love: ["Ditsy/small floral", "Gingham", "Check/plaid", "Solid/plain"], avoid: ["Abstract/large print", "Animal"], never: [] },
+    materials: { love: ["Chiffon", "Silk", "Cotton/pure cotton", "Linen"], avoid: ["Polyester"], never: [] },
+    lengths: { love: ["Midi/midaxi"], avoid: [], never: [] },
+    retailers: emptyGroup(),
+  };
+
+  const GROUP_KEYS = ["colours", "silhouettes", "necklines", "sleeves", "patterns", "materials", "lengths", "retailers"];
+  /** Forward-migrates a saved profile without discarding it. Mirrors src/lib/profile.ts. */
+  const normaliseProfile = (stored) => {
+    const next = Object.assign({}, profile, stored || {});
+    for (const key of GROUP_KEYS) {
+      const group = (stored && stored[key]) || {};
+      next[key] = { love: group.love || [], avoid: group.avoid || [], never: group.never || [] };
+    }
+    next.budgetMode = next.budgetMode === "strict" ? "strict" : "usual";
+    return next;
   };
 
   let retailerName = host;
@@ -24,13 +48,13 @@
   let root;
   let panel;
   let products = [];
-  let learnedSignals = [];
+  let learnedVotes = {};
+  let lastReaction = null;
+  let ranked = [];
+  let currentScan = { scanned: 0, pages: 0, complete: false, cursor: null };
 
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[char]);
   const safeUrl = (value) => { try { const url = new URL(value, location.origin); return url.protocol === "https:" ? url.href : ""; } catch { return ""; } };
-  const hasTerm = (text, term) => new RegExp(`(^|[^a-z0-9])${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9]|$)`, "i").test(text);
-  const stripHtml = (value = "") => value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-  const money = (amount) => Number.isFinite(amount) ? Number(amount) / 100 : 0;
   const merchantName = () => document.querySelector('meta[property="og:site_name"]')?.content?.trim() || document.title.split(/[|–—]/)[0].trim() || host;
   const queryFromPage = () => {
     const heading = document.querySelector("h1")?.textContent?.trim();
@@ -40,23 +64,14 @@
     if (/dress/i.test(page)) return "midi dress";
     return "women's clothing";
   };
-  const fullIntent = () => `Shopper explicitly approved sharing this Fashion Passport: ${profile.size}, ${profile.heightCm} cm; ${profile.season}; ${profile.shape}; loves ${profile.love.join(", ")}; avoids ${profile.avoid.join(", ")}; budget GBP ${profile.budget}`;
-  const theoryTerms = () => {
-    const colours = {
-      "Deep Winter": ["black", "white", "red", "dark pink", "jewel", "navy", "cobalt", "emerald", "blue"],
-      "Soft Summer": ["blue", "grey", "pink", "white", "taupe", "green"],
-      "Warm Spring": ["red", "burnt orange", "yellow", "green", "pink", "camel"],
-      "Deep Autumn": ["terracotta", "rust", "burnt orange", "camel", "olive", "brown", "jewel"],
-    };
-    const shapes = {
-      "Inverted triangle": ["a-line", "fit and flare", "flowy", "v-neck", "scoop", "asymmetric", "sleeveless", "three-quarter", "midi", "maxi", "chiffon", "silk", "linen"],
-      Pear: ["a-line", "fit and flare", "structured", "boat neck", "square neck", "cowl", "long sleeve", "three-quarter", "midi", "maxi", "cotton", "linen", "silk"],
-      Hourglass: ["fit and flare", "structured", "a-line", "v-neck", "scoop", "square neck", "three-quarter", "long sleeve", "sleeveless", "midi", "silk", "cotton", "linen"],
-      Rectangle: ["fit and flare", "flowy", "structured", "asymmetric", "cowl", "scoop", "cap sleeve", "three-quarter", "mini", "midi", "chiffon", "silk", "linen"],
-      Apple: ["flowy", "a-line", "structured", "v-neck", "scoop", "asymmetric", "three-quarter", "long sleeve", "midi", "maxi", "silk", "chiffon", "linen"],
-    };
-    return [...(colours[profile.season] || []), ...(shapes[profile.shape] || [])];
-  };
+  const fullIntent = () => [
+    `Shopper explicitly approved sharing this Fashion Passport: ${profile.size}, ${profile.heightCm} cm`,
+    `${profile.colourSeason}; ${profile.bodyShape}`,
+    `loves ${[...profile.colours.love, ...profile.silhouettes.love, ...profile.necklines.love, ...profile.materials.love].join(", ")}`,
+    `avoids ${[...profile.colours.avoid, ...profile.silhouettes.avoid, ...profile.necklines.avoid, ...profile.materials.avoid].join(", ")}`,
+    `never ${[...profile.colours.never, ...profile.silhouettes.never, ...profile.necklines.never, ...profile.materials.never].join(", ")}`,
+    `budget GBP ${profile.budget} (${profile.budgetMode})`,
+  ].join("; ");
 
   const rpc = async (method, params) => {
     const response = await fetch(endpoint, {
@@ -78,73 +93,21 @@
     } catch { return false; }
   };
 
-  const productText = (item) => {
-    const description = stripHtml(item.description?.html || "");
-    const tags = Array.isArray(item.tags) ? item.tags.join(" ") : "";
-    const options = Array.isArray(item.options) ? item.options.flatMap((option) => (option.values || []).map((value) => `${option.name}:${value.label}`)).join(" ") : "";
-    return `${item.title || ""} ${description} ${tags} ${options}`.toLowerCase();
-  };
 
-  const matchesCategory = (item, query) => {
-    const request = query.toLowerCase(); const title = String(item.title || "").toLowerCase();
-    const groups = [
-      { q: ["skirt", "skirts"], p: ["skirt", "skort"] }, { q: ["dress", "dresses"], p: ["dress", "gown"] },
-      { q: ["top", "tops"], p: ["top", "blouse", "shirt", "bodysuit", "vest", "camisole"] },
-      { q: ["trouser", "trousers", "pants"], p: ["trouser", "pants"] }, { q: ["jean", "jeans"], p: ["jean", "denim"] }
-    ];
-    const category = groups.find((group) => group.q.some((term) => new RegExp(`\\b${term}\\b`, "i").test(request)));
-    return !category || category.p.some((term) => new RegExp(`\\b${term}s?\\b`, "i").test(title));
-  };
 
-  const categoryLabel = (query) => {
-    const map = [["dress", "dresses"], ["skirt", "skirts"], ["top", "tops"], ["trouser", "trousers"], ["jean", "jeans"], ["jumpsuit", "jumpsuits"], ["short", "shorts"], ["coat", "coats and jackets"], ["jacket", "coats and jackets"], ["knit", "knitwear"]];
-    const hit = map.find(([term]) => new RegExp(`\\b${term}`, "i").test(String(query || "")));
-    return hit ? hit[1] : "products";
-  };
 
-  const hardPriceCap = (query) => {
-    const match = String(query || "").match(/(?:under|below|less than|max(?:imum)?|up to)\s*£?\s*(\d+(?:\.\d{1,2})?)/i);
-    return match ? Number(match[1]) : null;
-  };
-  let currentQuery = "";
+
+
   let panelTier = "strong";
   let panelShown = 24;
 
-  const analyse = (item) => {
-    const text = productText(item);
-    const learnedLikes = learnedSignals.filter((term) => term.startsWith("love:")).map((term) => term.slice(5).toLowerCase());
-    const learnedAvoids = learnedSignals.filter((term) => term.startsWith("avoid:")).map((term) => term.slice(6).toLowerCase());
-    const loves = [...profile.love, ...learnedLikes].filter((term) => hasTerm(text, term));
-    const theoryHits = theoryTerms().filter((term) => hasTerm(text, term));
-    const avoids = [...profile.avoid, ...learnedAvoids].filter((term) => hasTerm(text, term));
-    const price = money(item.price_range?.min?.amount);
-    const sizeOptions = (item.variants || []).filter((variant) => variant.availability?.available !== false).flatMap((variant) => (variant.options || []).filter((option) => option.name?.toLowerCase() === "size").map((option) => option.label));
-    const hasSizeData = sizeOptions.length > 0;
-    const hasSize = sizeOptions.some((size) => /(^|\D)10(\D|$)/.test(String(size)));
-    const overBudget = price > profile.budget;
-    const nevers = (profile.never || []).filter((term) => hasTerm(text, term));
-    const cap = hardPriceCap(currentQuery);
-    // The five hard rules. An ordinary avoid is never one of them.
-    const hardRules = [];
-    if (hasSizeData && !hasSize) hardRules.push(`${profile.size} is sold out`);
-    if (cap !== null && price > cap) hardRules.push(`Over your £${cap} limit for this search`);
-    if (nevers.length) hardRules.push(`${nevers[0]} is on your never list`);
-    if (profile.budgetMode === "strict" && overBudget) hardRules.push(`Over your £${profile.budget} budget`);
-    const blocked = hardRules.length > 0;
-    const uniqueLoves = [...new Set(loves)].slice(0, 3);
-    // Base 40, so a product with no usable attributes stays in `other`.
-    const score = Math.max(1, Math.min(99, 40 + uniqueLoves.length * 9 + Math.min(theoryHits.length, 2) * 5 - avoids.length * 8 - (overBudget && profile.budgetMode !== "strict" ? 8 : 0) + (hasSize ? 3 : 0)));
-    const state = blocked ? "held" : score >= 70 ? "strong" : score >= 50 ? "worth" : "other";
-    const reasons = [];
-    if (hasSize) reasons.push("UK 10 available");
-    if (uniqueLoves[0]) reasons.push(`Matches your ${uniqueLoves[0]} preference`);
-    if (uniqueLoves[1]) reasons.push(`Also ${uniqueLoves[1]}`);
-    if (theoryHits[0]) reasons.push(`Likely to suit your ${profile.season} / ${profile.shape} profile`);
-    if (!overBudget) reasons.push(`Within £${profile.budget} budget`);
-    if (overBudget) reasons.push(`Over £${profile.budget} budget`);
-
-    return { item, text, price, score, state, hardRules, conflicts: [...new Set(avoids)], reasons, blocked, image: item.media?.find((media) => media.type === "image")?.url || item.variants?.flatMap((variant) => variant.media || []).find((media) => media.type === "image")?.url || "" };
-  };
+  /**
+   * P0.2: every ranking decision comes from the shared engine, so the panel
+   * and the Passport app cannot disagree. tests/parity.test.ts enforces it.
+   */
+  const learnedPreferences = () => FE.derivePreferences(learnedVotes);
+  const scoreAll = (items, query) =>
+    FE.rankProducts(items, { profile, query, learned: learnedPreferences(), theory: FE.THEORY });
 
   const renderPill = (status = "") => {
     if (!root) return;
@@ -156,7 +119,7 @@
   const showApproval = () => {
     document.getElementById("fashion-passport-consent")?.remove();
     const modal = document.createElement("div"); modal.id = "fashion-passport-consent";
-    modal.innerHTML = `<div class="fp-consent-card"><button class="fp-close" aria-label="Close">×</button><div class="fp-passport">▣</div><p class="fp-kicker">Official Shopify connection detected</p><h2>Connect Fashion Passport once?</h2><p>This single approval applies your Passport on compatible Shopify stores, including ${escapeHtml(retailerName)}, without asking again for every shop or category. Browsing history stays in this browser.</p><dl><div><dt>Size & fit</dt><dd>UK 10 · 163 cm</dd></div><div><dt>Style context</dt><dd>Deep Winter · Inverted triangle</dd></div><div><dt>Taste & limits</dt><dd>Colours, cuts, fabric · £100 max</dd></div></dl><button class="fp-allow">Connect once →</button><button class="fp-not-now">Not now</button><small>${escapeHtml(endpoint)}</small></div>`;
+    modal.innerHTML = `<div class="fp-consent-card"><button class="fp-close" aria-label="Close">×</button><div class="fp-passport">▣</div><p class="fp-kicker">Official Shopify connection detected</p><h2>Connect Fashion Passport once?</h2><p>This single approval applies your Passport on compatible Shopify stores, including ${escapeHtml(retailerName)}, without asking again for every shop or category. Browsing history stays in this browser.</p><dl><div><dt>Size &amp; fit</dt><dd>${escapeHtml(profile.size)} · ${escapeHtml(String(profile.heightCm))} cm</dd></div><div><dt>Style context</dt><dd>${escapeHtml(profile.colourSeason)} · ${escapeHtml(profile.bodyShape)}</dd></div><div><dt>Taste &amp; limits</dt><dd>Colours, cuts, fabric · £${escapeHtml(String(profile.budget))} ${escapeHtml(profile.budgetMode)}</dd></div></dl><button class="fp-allow">Connect once →</button><button class="fp-not-now">Not now</button><small>${escapeHtml(endpoint)}</small></div>`;
     document.documentElement.appendChild(modal);
     modal.querySelector(".fp-close").addEventListener("click", () => modal.remove());
     modal.querySelector(".fp-not-now").addEventListener("click", () => modal.remove());
@@ -165,39 +128,130 @@
     });
   };
 
-  const renderPanel = (query, ranked, scan) => {
-    currentQuery = query;
+  const renderPanel = (query) => {
     panel?.remove(); panel = document.createElement("aside"); panel.id = "fashion-passport-results";
-    const counts = {
-      strong: ranked.filter((r) => r.state === "strong").length,
-      worth: ranked.filter((r) => r.state === "worth").length,
-      other: ranked.filter((r) => r.state === "other").length,
-      held: ranked.filter((r) => r.state === "held").length,
-    };
+
+    // P0.5: one partition feeds every visible figure, so the counts add up and
+    // wrong-category products are gated out rather than reported as held.
+    const partition = FE.partitionResults(currentScan.scanned, ranked, query);
+    const counts = partition.counts;
     if (panelTier === "strong" && counts.strong === 0 && counts.worth > 0) panelTier = "worth";
-    const inTier = panelTier === "held" ? ranked.filter((r) => r.state === "held")
-      : panelTier === "all" ? ranked.filter((r) => r.state !== "held")
-      : ranked.filter((r) => r.state === panelTier);
+    const inTier = panelTier === "held" ? partition.inCategory.filter((r) => r.state === "held")
+      : panelTier === "all" ? [...partition.inCategory.filter((r) => r.state !== "held"), ...partition.unknownCategory]
+      : partition.inCategory.filter((r) => r.state === panelTier);
     // A render batch for performance, never a recommendation cap.
     const visible = inTier.slice(0, panelShown);
     const remaining = inTier.length - visible.length;
-    const cards = visible.map((result) => {
-      const url = safeUrl(result.item.url); const image = safeUrl(result.image);
-      return `<article class="fp-result-card"><a href="${escapeHtml(url)}" target="_blank" rel="noreferrer">${image ? `<img src="${escapeHtml(image)}" alt="">` : ""}${result.state === "held" ? "" : `<span class="fp-score">${result.score}%</span>`}<div><small>${escapeHtml(retailerName)}</small><h3>${escapeHtml(result.item.title)}</h3><strong>£${result.price.toFixed(2)}</strong><ul>${result.reasons.slice(0, 3).map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}${result.conflicts.slice(0, 2).map((c) => `<li class="fp-conflict">${escapeHtml(c)}</li>`).join("")}${result.hardRules.map((r) => `<li class="fp-hard">${escapeHtml(r)}</li>`).join("")}</ul></div></a><div class="fp-feedback"><button data-signal="down" data-traits="${escapeHtml([...new Set([...result.reasons.join(" ").match(/[a-z-]{4,}/gi) || []])].slice(0, 0).join(","))}" data-title="${escapeHtml(result.item.title)}" aria-label="Show less like this">↓</button><button data-signal="up" aria-label="Show more like this">↑</button></div></article>`;
+
+    const cards = visible.map((result, index) => {
+      const url = safeUrl(result.productUrl); const image = safeUrl(result.imageUrl);
+      const badge = result.state === "held" || result.evidenceConfidence === "low" ? "" : `<span class="fp-score">${result.matchScore}%</span>`;
+      const notes = [
+        ...result.reasons.slice(0, 3).map((reason) => `<li>${escapeHtml(reason.label)}</li>`),
+        ...result.conflicts.slice(0, 2).map((reason) => `<li class="fp-conflict">${escapeHtml(reason.label)}</li>`),
+        ...result.hardRules.map((rule) => `<li class="fp-hard">${escapeHtml(rule.label)}</li>`),
+      ].join("");
+      return `<article class="fp-result-card"><a href="${escapeHtml(url)}" target="_blank" rel="noreferrer">${image ? `<img src="${escapeHtml(image)}" alt="">` : ""}${badge}<div><small>${escapeHtml(retailerName)}</small><h3>${escapeHtml(result.name)}</h3><strong>£${result.price.toFixed(2)}</strong><ul>${notes}</ul></div></a><div class="fp-feedback"><button data-signal="down" data-index="${index}" aria-label="Less like this">↓</button><button data-signal="up" data-index="${index}" aria-label="More like this">↑</button></div></article>`;
     }).join("");
-    const scannedLabel = scan.complete ? String(scan.scanned) : `at least ${scan.scanned}`;
-    panel.innerHTML = `<header><div><p>Fashion Passport</p><h2>${escapeHtml(retailerName)}</h2><span><i></i> Live Shopify UCP</span></div><button class="fp-panel-close" aria-label="Close">×</button></header><form><input value="${escapeHtml(query)}" aria-label="Search this retailer"><button>Rank</button></form><div class="fp-result-summary"><strong>${scannedLabel}</strong> catalogue products scanned · <strong>${ranked.length}</strong> ${escapeHtml(categoryLabel(query))} found<br>${counts.strong} strong · ${counts.worth} worth a look · ${counts.held} held by your rules</div><nav class="fp-tiers">${[["strong", "Strong", counts.strong], ["worth", "Worth a look", counts.worth], ["all", "All", counts.strong + counts.worth + counts.other], ["held", "Held", counts.held]].map(([key, label, count]) => `<button data-tier="${key}" class="${panelTier === key ? "is-on" : ""}">${label} <i>${count}</i></button>`).join("")}</nav><div class="fp-results-grid">${cards || `<p class="fp-empty">No suitable live matches returned. Try a broader search.</p>`}</div>${remaining > 0 ? `<button class="fp-load-more">Load ${Math.min(24, remaining)} more · ${remaining} still to see</button>` : ""}<footer>${scan.pages} catalogue ${scan.pages === 1 ? "page" : "pages"} read · retailer-owned products · personal ranking</footer>`;
+
+    // P0.6: never present a total while the retailer says there is more.
+    const scannedLabel = currentScan.complete ? String(currentScan.scanned) : `${currentScan.scanned} so far`;
+    const categoryLine = partition.requested
+      ? `<strong>${counts.categoryCorrect}</strong> ${escapeHtml(FE.pluralCategory(partition.requested))} found${currentScan.complete ? "" : " so far"}`
+      : `<strong>${ranked.length}</strong> products ranked`;
+    const tiers = [["strong", "Strong", counts.strong], ["worth", "Worth a look", counts.worth],
+      ["all", "All", counts.strong + counts.worth + counts.other + counts.unknownCategory], ["held", "Held", counts.held]];
+
+    panel.innerHTML = `<header><div><p>Fashion Passport</p><h2>${escapeHtml(retailerName)}</h2><span><i></i> Live Shopify UCP</span></div><button class="fp-panel-close" aria-label="Close">×</button></header>`
+      + `<form><input value="${escapeHtml(query)}" aria-label="Search this retailer"><button>Rank</button></form>`
+      + `<div class="fp-result-summary"><strong>${scannedLabel}</strong> catalogue products scanned · ${categoryLine}<br>${counts.strong} strong · ${counts.worth} worth a look · ${counts.other} other · ${counts.held} held by your rules</div>`
+      + `<nav class="fp-tiers">${tiers.map(([key, label, count]) => `<button data-tier="${key}" class="${panelTier === key ? "is-on" : ""}">${escapeHtml(label)} <i>${count}</i></button>`).join("")}</nav>`
+      + (lastReaction ? `<div class="fp-learned"><span>Passport learned: ${escapeHtml(lastReaction.label)}.${lastReaction.moved > 0 ? ` ${lastReaction.moved} ${lastReaction.moved === 1 ? "product" : "products"} moved.` : " It takes repeated evidence to change the order."}</span><button class="fp-undo">Undo</button>${lastReaction.options.length ? `<div class="fp-reasons"><em>${lastReaction.direction === "up" ? "What worked?" : "What put you off?"}</em>${lastReaction.options.map((option) => `<button class="fp-reason" data-key="${escapeHtml(option.key)}">${escapeHtml(option.value)}</button>`).join("")}<button class="fp-reason fp-reason-skip">Skip</button></div>` : ""}</div>` : "")
+      + `<div class="fp-results-grid">${cards || `<p class="fp-empty">Nothing in this tier. Try another tier or a broader search.</p>`}</div>`
+      + (remaining > 0 ? `<button class="fp-load-more">Load ${Math.min(24, remaining)} more · ${remaining} still to see</button>` : "")
+      + (!currentScan.complete ? `<button class="fp-scan-more">Keep scanning the catalogue · ${currentScan.pages} pages read</button>` : "")
+      + `<footer>${currentScan.pages} catalogue ${currentScan.pages === 1 ? "page" : "pages"} read${currentScan.complete ? " · catalogue complete" : " · more available"} · retailer-owned products</footer>`;
+
     document.documentElement.appendChild(panel);
     panel.querySelector(".fp-panel-close").addEventListener("click", togglePanel);
     panel.querySelectorAll("[data-tier]").forEach((button) => button.addEventListener("click", () => {
-      panelTier = button.dataset.tier; panelShown = 24; renderPanel(query, ranked, scan);
+      panelTier = button.dataset.tier; panelShown = 24; renderPanel(query);
     }));
-    panel.querySelector(".fp-load-more")?.addEventListener("click", () => { panelShown += 24; renderPanel(query, ranked, scan); });
-    panel.querySelector("form").addEventListener("submit", (event) => { event.preventDefault(); const value = panel.querySelector("input").value.trim(); if (value) searchCatalogue(value); });
-    panel.querySelectorAll("[data-signal]").forEach((button) => button.addEventListener("click", async () => {
-      if (button.dataset.signal === "down" && button.dataset.trait !== "style") learnedSignals = [...new Set([...learnedSignals, button.dataset.trait])];
-      await chrome.storage.local.set({ [signalKey]: learnedSignals }); showToast(button.dataset.signal === "up" ? "Saved — more like this" : "Saved — less like this");
+    panel.querySelector(".fp-load-more")?.addEventListener("click", () => { panelShown += 24; renderPanel(query); });
+    panel.querySelector(".fp-scan-more")?.addEventListener("click", () => { void continueScan(query); });
+    panel.querySelector("form").addEventListener("submit", (event) => {
+      event.preventDefault(); const value = panel.querySelector("input").value.trim(); if (value) searchCatalogue(value);
+    });
+    panel.querySelector(".fp-undo")?.addEventListener("click", () => { void undoLastReaction(query); });
+    panel.querySelectorAll(".fp-reason").forEach((button) => button.addEventListener("click", () => {
+      void narrowLastReaction(query, button.dataset.key || null);
     }));
+    panel.querySelectorAll("[data-signal]").forEach((button) => button.addEventListener("click", () => {
+      void react(query, visible[Number(button.dataset.index)], button.dataset.signal);
+    }));
+  };
+
+  /**
+   * P0.1: both reactions record every known trait as raw {up, down} tallies,
+   * using the same semantics as src/lib/learned.ts. One vote changes no derived
+   * preference; two net votes create one. The panel reranks immediately, the
+   * moved count is measured rather than asserted, and Undo restores the
+   * previous tallies and order.
+   */
+  const react = async (query, product, direction) => {
+    if (!product) return;
+    const keys = FE.traitKeysForProduct(product.evidence);
+    if (keys.length === 0) return;
+    const before = ranked.map((item) => item.id);
+    const previousVotes = learnedVotes;
+    learnedVotes = FE.recordVote(learnedVotes, keys, direction);
+    ranked = scoreAll(products, query);
+    const moved = ranked.reduce((total, item, index) => (before[index] === item.id ? total : total + 1), 0);
+
+    // Name a trait the signal can actually move: an explicitly stated trait is
+    // never affected by learning, so naming it would mislead.
+    const groupFor = { colour: "colours", silhouette: "silhouettes", neckline: "necklines", sleeve: "sleeves", length: "lengths", pattern: "patterns", material: "materials" };
+    const options = FE.FASHION_DIMENSIONS
+      .map((dimension) => ({ dimension, value: product.evidence[dimension].value }))
+      .filter((entry) => entry.value !== "Unknown")
+      .map((entry) => ({ ...entry, key: FE.traitKey(entry.dimension, entry.value) }));
+    const movable = options.find((entry) => {
+      const group = profile[groupFor[entry.dimension]] || {};
+      return ![...(group.love || []), ...(group.avoid || []), ...(group.never || [])]
+        .some((stated) => String(stated).toLowerCase() === entry.value.toLowerCase());
+    });
+    lastReaction = {
+      keys, direction, previousVotes, moved, options,
+      label: `${direction === "up" ? "more" : "less"} ${(movable ? movable.value : "like this").toLowerCase()}`,
+    };
+    await persistVotes();
+    panelShown = Math.max(panelShown, 24);
+    renderPanel(query);
+  };
+
+  const undoLastReaction = async (query) => {
+    if (!lastReaction) return;
+    learnedVotes = lastReaction.previousVotes;
+    lastReaction = null;
+    ranked = scoreAll(products, query);
+    await persistVotes();
+    renderPanel(query);
+  };
+
+  /** Narrows the broad vote to one chosen trait. Optional, never blocking. */
+  const narrowLastReaction = async (query, key) => {
+    if (!lastReaction) return;
+    if (key) {
+      learnedVotes = FE.recordVote(FE.undoVote(learnedVotes, lastReaction.keys, lastReaction.direction), [key], lastReaction.direction);
+      ranked = scoreAll(products, query);
+      await persistVotes();
+    }
+    lastReaction = null;
+    renderPanel(query);
+  };
+
+  const persistVotes = async () => {
+    try { await chrome.storage.local.set({ [votesKey]: learnedVotes }); } catch { /* storage unavailable */ }
   };
 
   const togglePanel = () => {
@@ -211,68 +265,133 @@
     return JSON.parse(text || "{}");
   };
 
-  const readFullCatalog = async (query) => {
-    const found = new Map();
-    let cursor = ""; let hasNext = true; let pages = 0;
-    const maxPages = 12;
-    while (hasNext && pages < maxPages) {
-      renderPill(pages ? `Scanning ${found.size}+ live products…` : "Opening full live catalogue…");
+  /**
+   * P0.6: the on-retailer surface is the core proof, so it reads the catalogue
+   * to exhaustion. `SAFETY_PAGES` is a defensive ceiling against a retailer
+   * that never stops paging, not a product cap: when it is reached the cursor
+   * is saved, counts are labelled "so far", and the panel offers a control to
+   * continue from exactly where it stopped.
+   */
+  const SAFETY_PAGES = 200;
+  const rawById = new Map();
+
+  const readCatalogFrom = async (query, startCursor, startPages) => {
+    let cursor = startCursor || "";
+    let hasNext = true;
+    let pages = startPages || 0;
+    let readThisRun = 0;
+    while (hasNext && readThisRun < SAFETY_PAGES) {
+      renderPill(rawById.size ? `Scanning ${rawById.size} live products…` : "Opening the live catalogue…");
       const payload = await readCatalogPage(query, cursor);
       const pageProducts = Array.isArray(payload.products) ? payload.products : [];
-      pageProducts.forEach((item) => found.set(item.id || item.url || `${pages}:${item.title}`, item));
+      pageProducts.forEach((item) => rawById.set(item.id || item.url || `${pages}:${item.title}`, item));
       pages += 1;
+      readThisRun += 1;
       hasNext = Boolean(payload.pagination?.has_next_page && payload.pagination?.cursor && pageProducts.length);
       cursor = hasNext ? payload.pagination.cursor : "";
     }
-    return { products: [...found.values()], scanned: found.size, pages, complete: !hasNext };
+    return { scanned: rawById.size, pages, complete: !hasNext, cursor: hasNext ? cursor : null };
+  };
+
+  /** Continues from the saved cursor, deduplicates and reranks the larger set. */
+  const continueScan = async (query) => {
+    if (currentScan.complete || !currentScan.cursor) return;
+    try {
+      currentScan = await readCatalogFrom(query, currentScan.cursor, currentScan.pages);
+      products = [...rawById.values()].map((item) => FE.normaliseUcpProduct(item, host, retailerName)).filter((item) => item.productUrl);
+      ranked = scoreAll(products, query);
+      renderPill();
+      renderPanel(query);
+    } catch (error) {
+      renderPill("Connection needs retry");
+      showToast(`Could not continue this catalogue: ${error instanceof Error ? error.message : "unknown error"}`);
+    }
   };
 
   const searchCatalogue = async (query) => {
-    currentQuery = query;
     if (!approved) return showApproval();
     renderPill("Calling native endpoint…");
     try {
-      const scan = await readFullCatalog(query);
-      products = scan.products.filter((item) => matchesCategory(item, query));
-      const ranked = products.map(analyse).sort((a, b) => b.score - a.score);
-      renderPanel(query, ranked, scan); personalized = true;
-      document.documentElement.dataset.fashionPassportSummary = JSON.stringify({ protocol: "Shopify UCP/MCP", endpoint, catalogueScanned: scan.scanned, relevantRanked: ranked.length, catalogueCountComplete: scan.complete, pagesRead: scan.pages, recommended: ranked.filter((item) => item.score >= 82 && !item.blocked).length, hidden: ranked.filter((item) => item.blocked).length, query });
-      renderPill(); showToast(`${ranked.length} relevant products ranked from ${scan.complete ? scan.scanned : `${scan.scanned}+`} scanned`);
+      rawById.clear();
+      panelTier = "strong"; panelShown = 24; lastReaction = null;
+      currentScan = await readCatalogFrom(query, "", 0);
+      products = [...rawById.values()].map((item) => FE.normaliseUcpProduct(item, host, retailerName)).filter((item) => item.productUrl);
+      ranked = scoreAll(products, query);
+      const partition = FE.partitionResults(currentScan.scanned, ranked, query);
+      renderPanel(query); personalized = true;
+      document.documentElement.dataset.fashionPassportSummary = JSON.stringify({
+        protocol: "Shopify UCP/MCP", endpoint,
+        catalogueScanned: currentScan.scanned,
+        catalogueComplete: currentScan.complete,
+        categoryCorrect: partition.counts.categoryCorrect,
+        strong: partition.counts.strong, worth: partition.counts.worth,
+        other: partition.counts.other, held: partition.counts.held,
+        pages: currentScan.pages,
+      });
+      renderPill();
+      showToast(`${partition.counts.categoryCorrect} ranked from ${currentScan.complete ? currentScan.scanned : `${currentScan.scanned} so far`} scanned`);
     } catch (error) {
-      renderPill("Connection needs retry"); showToast(`Could not read this catalogue: ${error instanceof Error ? error.message : "unknown error"}`);
+      renderPill("Connection needs retry");
+      showToast(`Could not read this catalogue: ${error instanceof Error ? error.message : "unknown error"}`);
     }
   };
 
   const showToast = (message) => { document.querySelector(".fp-toast")?.remove(); const toast = document.createElement("div"); toast.className = "fp-toast"; toast.textContent = `✓ ${message}`; document.documentElement.appendChild(toast); window.setTimeout(() => toast.remove(), 3200); };
 
+  /**
+   * P0.3: the complete migrated profile travels, including every `never` group
+   * and `budgetMode`, alongside the raw vote tallies the app writes. Nothing is
+   * collapsed back into flat love/avoid arrays.
+   */
   const syncPassportApp = async () => {
     const connected = localStorage.getItem("fashion-passport:connected") === "true";
-    let savedProfile;
-    let savedSignals;
+    let savedProfile = null;
+    let savedVotes = {};
+    let legacySignals = [];
     try { savedProfile = JSON.parse(localStorage.getItem(profileKey) || "null"); } catch { savedProfile = null; }
-    try { savedSignals = JSON.parse(localStorage.getItem("fashion-passport:learned-avoid") || "[]"); } catch { savedSignals = []; }
+    try { savedVotes = JSON.parse(localStorage.getItem(votesKey) || "{}"); } catch { savedVotes = {}; }
+    try { legacySignals = JSON.parse(localStorage.getItem("fashion-passport:learned-avoid") || "[]"); } catch { legacySignals = []; }
     approved = connected;
-    await chrome.storage.local.set({ [approvalKey]: connected, [signalKey]: Array.isArray(savedSignals) ? savedSignals : [], ...(savedProfile ? { [profileKey]: savedProfile } : {}) });
+    if (savedProfile) profile = normaliseProfile(savedProfile);
+    if (savedVotes && typeof savedVotes === "object") learnedVotes = savedVotes;
+    await chrome.storage.local.set({
+      [approvalKey]: connected,
+      [votesKey]: learnedVotes,
+      [signalKey]: Array.isArray(legacySignals) ? legacySignals : [],
+      ...(savedProfile ? { [profileKey]: profile } : {}),
+    });
   };
 
   const init = async () => {
     if (document.querySelector('meta[name="fashion-passport-app"]')) {
       await syncPassportApp();
       document.addEventListener("fashion-passport:connection-changed", syncPassportApp);
+      document.addEventListener("fashion-passport:learned-changed", syncPassportApp);
+      window.addEventListener("storage", (event) => {
+        if (!event.key || event.key === votesKey || event.key === profileKey) void syncPassportApp();
+      });
       return;
     }
     const compatible = await probe();
     if (!compatible) return;
     retailerName = merchantName();
-    const saved = await chrome.storage.local.get([approvalKey, signalKey, profileKey]); approved = saved[approvalKey] === true; learnedSignals = Array.isArray(saved[signalKey]) ? saved[signalKey] : [];
-    if (saved[profileKey]) {
-      const stored = saved[profileKey];
-      profile = {
-        size: stored.size || profile.size, heightCm: stored.heightCm || profile.heightCm, budget: stored.budget || profile.budget,
-        season: stored.colourSeason || profile.season, shape: stored.bodyShape || profile.shape,
-        love: [...(stored.colours?.love || []), ...(stored.silhouettes?.love || []), ...(stored.necklines?.love || []), ...(stored.sleeves?.love || []), ...(stored.patterns?.love || []), ...(stored.materials?.love || []), ...(stored.lengths?.love || [])].map((item) => String(item).toLowerCase()),
-        avoid: [...(stored.colours?.avoid || []), ...(stored.silhouettes?.avoid || []), ...(stored.necklines?.avoid || []), ...(stored.sleeves?.avoid || []), ...(stored.patterns?.avoid || []), ...(stored.materials?.avoid || []), ...(stored.lengths?.avoid || [])].map((item) => String(item).toLowerCase()),
-      };
+    const saved = await chrome.storage.local.get([approvalKey, signalKey, profileKey, votesKey]);
+    approved = saved[approvalKey] === true;
+    // The full grouped profile is kept, never flattened into love/avoid pairs.
+    if (saved[profileKey]) profile = normaliseProfile(saved[profileKey]);
+    if (saved[votesKey] && typeof saved[votesKey] === "object") learnedVotes = saved[votesKey];
+    // A profile saved before the vote model existed still contributes.
+    const legacy = Array.isArray(saved[signalKey]) ? saved[signalKey] : [];
+    for (const raw of legacy) {
+      const value = String(raw).replace(/^(love|avoid):/, "");
+      const direction = String(raw).startsWith("love:") ? "up" : "down";
+      for (const dimension of FE.FASHION_DIMENSIONS) {
+        const canonical = FE.mapToCanonical(dimension, value);
+        if (!canonical) continue;
+        const key = FE.traitKey(dimension, canonical);
+        if (!learnedVotes[key]) learnedVotes = FE.recordVote(FE.recordVote(learnedVotes, [key], direction), [key], direction);
+        break;
+      }
     }
     document.documentElement.dataset.fashionPassportCompatible = "true";
     document.documentElement.dataset.fashionPassportEndpoint = endpoint;
