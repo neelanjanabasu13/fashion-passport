@@ -375,7 +375,7 @@ Unknown size availability is not a hard block. The profile's usual budget is not
 
 ### Stage 3: match score
 
-Start every category-correct, non-held product at 50.
+Start every category-correct, non-held product at 40. A product with no usable fashion attributes therefore remains in `other`; missing information must never promote it into `worth`.
 
 Explicit positive preference weights:
 
@@ -611,7 +611,7 @@ Use the supplied `The Verdict Book` direction with the following frozen interpre
 - Use fewer borders and boxes; preserve generous editorial whitespace.
 - Do not stamp every product.
 - Replace binary `Admitted/Refused` with the result states in this specification.
-- Replace fixed `833 -> 50` with live counts.
+- Replace every fixed before/after product count with counts calculated from the current live catalogue response.
 - Expand the book beyond colour.
 - Make the Passport's learned layer visibly update after shopping feedback.
 
